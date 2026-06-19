@@ -1,7 +1,7 @@
-# AI Hackathon Framework with FastAPI
+# AI Hackathon DEMO Framework with FastAPI
 
 This is a framework for hosting beamphysics AI hackathons. Example problem is round-to-flat beam optimization (MagnetOptimizer). 
-See <a href="https://halavanau.group">halavanau.group</a> and GP optimizer notebook for demo.
+See <a href="https://halavanau.group/slacathon26">halavanau.group</a> and GP optimizer notebook for demo.
 
 ## Installation Instructions
 
