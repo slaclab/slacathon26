@@ -129,7 +129,7 @@ server {
 
     # Main application at /slacathon26
     location /slacathon26/ {
-        proxy_pass http://127.0.0.1:8000/slacathon26/;
+        proxy_pass http://127.0.0.1:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -146,16 +146,9 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Optional: Serve static files directly
-    location /static/ {
-        alias /home/alex/backend/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
     # Optional: Health check endpoint
     location /slacathon26/health {
-        proxy_pass http://127.0.0.1:8000/slacathon26/health;
+        proxy_pass http://127.0.0.1:8000/;
         access_log off;
     }
 }
@@ -224,7 +217,7 @@ server {
     location /slacathon26/ {
         limit_req zone=api_limit burst=20 nodelay;
         
-        proxy_pass http://127.0.0.1:8000/slacathon26/;
+        proxy_pass http://127.0.0.1:8000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
