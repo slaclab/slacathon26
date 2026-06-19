@@ -1,31 +1,48 @@
-# AI Hackathon Framework with FastAPI
+# SLACATHON 2026 - Pluggable AI Optimization Platform (FastAPI)
 
-This is a framework for hosting beamphysics AI hackathons. Example problem is round-to-flat beam optimization (MagnetOptimizer). 
-See <a href="https://halavanau.group">halavanau.group</a> and GP optimizer notebook for demo.
+Framework for hosting AI optimization hackathons (e.g. beam physics challenges).
 
-## Installation Instructions
+Supports **pluggable tasks** via the `tasks/` directory. Switch the active task with the `ACTIVE_TASK` environment variable (defaults to `beamline`).
 
-### 1. Clone the repository
+- Discover input schema at `GET /task`
+- Dynamic validation and storage using Pydantic models per task
+- Example tasks: Beamline Guru (default), with stubs for FEL / MARS
+
+See the live site and GPOptimizer client for usage examples.
+
+## Installation
+
+### 1. Clone
 ```bash
 git clone https://github.com/balticfish/slacathon26.git
 cd slacathon26
 ```
 
-### 2. Create and activate a virtual environment
+### 2. Virtualenv
 ```bash
 python -m venv venv
-```
-
-**Activate the environment:**
-- On macOS/Linux: 
-```bash
-  source venv/bin/activate
-```
-
-### 3. Install dependencies
-```bash
+source venv/bin/activate
 pip install numpy scipy fastapi uvicorn gunicorn
 ```
+
+### 3. Configuration
+```bash
+cp .env.example .env
+# Edit .env and set SLACATHON_API_KEYS (comma or space separated)
+```
+
+### 4. Run
+```bash
+./start.sh
+```
+
+Or for development:
+```bash
+source venv/bin/activate
+uvicorn main:app --reload
+```
+
+**Note:** `start.sh` hard-codes the venv path for the current deployment. Edit it or use your own activation for other environments. Set `ACTIVE_TASK` to switch challenge logic (see `tasks/`).
 
 ## Registering as a System Service (Linux with systemd)
 
@@ -43,9 +60,9 @@ After=nss-user-lookup.target
 [Service]
 User=alex
 Group=www-data
-WorkingDirectory=/home/alex/app
-Environment="PATH=/home/alex/app/venv/bin"
-ExecStart=/home/alex/app/start.sh
+WorkingDirectory=/home/alex/backend
+Environment="PATH=/home/alex/backend/venv/bin"
+ExecStart=/home/alex/backend/start.sh
 Restart=always
 
 [Install]
@@ -269,55 +286,89 @@ sudo systemctl reload nginx
 ```
 
 ## Project Structure
+
 ```
-slacathon26/
-├── app/
-│   ├── venv/
-│   ├── main.py
-│   ├── middleware.py
-│   ├── models.py
-│   ├── logic.py
-│   ├── start.sh
-│   ├── index.html
-│   ├── leaderboard.html
-│   ├── team.html
-│   └── requirements.txt
+backend/
+├── main.py                 # FastAPI app (root_path=/slacathon26)
+├── middleware.py           # Auth, quotas, jobs, leaderboard logic
+├── task_loader.py          # Loads active task from tasks/ dir
+├── tasks/
+│   ├── base.py             # TaskInput, TaskResult, Task protocol
+│   ├── beamline.py         # Default task (RTFB beam optimization)
+│   └── __init__.py
+├── GPOptimizer.py          # Gaussian Process optimizer client
+├── optimize_usage.py       # Example optimization script (with patching)
+├── usage.py                # Simple validation client example
+├── start.sh                # Launcher (activates venv + gunicorn)
+├── .env.example
+├── fort.1                  # Physics data file (for beamline task)
+├── index.html              # Landing / hero page
+├── leaderboard.html        # Leaderboard UI (dynamic via /task)
+├── team.html
+├── .gitignore
 └── README.md
 ```
 
+**Key changes from legacy structure:**
+- `models.py` and `logic.py` removed (dead code cleaned)
+- New `task_loader.py` + `tasks/` package for pluggable challenges
+- All static HTML served from root
+- No top-level `app/` directory in the repo layout
+
 ## Development
 
-To run the application in development mode:
 ```bash
+# Recommended: use the provided start.sh (or manually)
+source venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## Production Deployment
+## Production
 
-For production, use Gunicorn with Uvicorn workers:
+Use the included launcher (recommended):
+
 ```bash
-gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 127.0.0.1:8000
+./start.sh
 ```
 
-**Note:** When behind Nginx, bind to `127.0.0.1` instead of `0.0.0.0` for security.
+It activates the venv and runs:
+```bash
+gunicorn -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 \
+  --bind 127.0.0.1:8888 main:app
+```
+
+To switch tasks (pluggable system):
+
+```bash
+export ACTIVE_TASK=beamline   # or fel, mars, etc.
+./start.sh
+```
+
+See `GET /task` for the current task's input schema, labels, and bounds.
 
 ## Accessing the Application
 
-Once deployed:
+The app is mounted under `/slacathon26` (FastAPI `root_path`).
 
-- **Landing Page:** `https://your-domain.com/app/`
-- **Leaderboard:** `https://your-domain.com/app/board`
-- **Team Page:** `https://your-domain.com/app/team`
-- **API Validation:** `POST https://your-domain.com/app/validate`
-- **API Submit:** `POST https://your-domain.com/app/submit`
+- **Landing Page:** `https://your-domain.com/slacathon26/`
+- **Leaderboard:** `https://your-domain.com/slacathon26/board`
+- **Team Page:** `https://your-domain.com/slacathon26/team`
+- **Task Info / Schema:** `GET https://your-domain.com/slacathon26/task`
+- **Validate (job-based):** `POST https://your-domain.com/slacathon26/validate`
+- **Submit to leaderboard:** `POST https://your-domain.com/slacathon26/submit`
+- **History / Leaderboard:** `GET /history`, `GET /leaderboard`
+
+Use `X-API-Key` header for protected endpoints. See `/task` for the exact input shape expected by the currently active task.
 
 ## Features
 
-- 🚀 FastAPI-based REST API
-- 🔐 API key authentication
-- 📊 Real-time leaderboard
-- 🎯 Optimization challenge framework
-- 📈 Historical tracking of submissions
+- 🚀 FastAPI + Gunicorn
+- 🔐 API key authentication + per-user quotas
+- 🔌 Pluggable tasks (`tasks/*.py` + `ACTIVE_TASK` env)
+- 📊 Dynamic input schema (`GET /task`)
+- 📈 Job-based validation + full history
+- 🏆 Leaderboard with duplicate detection
+- 🧪 Example GP optimizer client (GPOptimizer.py)
 
 ## License
 
