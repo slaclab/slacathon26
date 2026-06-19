@@ -1,4 +1,4 @@
-# SLACATHON 2026 - Pluggable AI Optimization Platform (FastAPI)
+# SLACATHON'26 DEMO - AI optimization platform for accelerators
 
 Framework for hosting AI optimization hackathons (e.g. beam physics challenges).
 
@@ -127,9 +127,9 @@ server {
     # Redirect HTTP to HTTPS (optional, after SSL setup)
     # return 301 https://$server_name$request_uri;
 
-    # Main application at /app
-    location /app/ {
-        proxy_pass http://127.0.0.1:8000/app/;
+    # Main application at /backend
+    location /backend/ {
+        proxy_pass http://127.0.0.1:8000/backend/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -148,14 +148,14 @@ server {
 
     # Optional: Serve static files directly
     location /static/ {
-        alias /home/alex/app/static/;
+        alias /home/alex/backend/static/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
 
     # Optional: Health check endpoint
     location /health {
-        proxy_pass http://127.0.0.1:8000/app/health;
+        proxy_pass http://127.0.0.1:8000/backend/health;
         access_log off;
     }
 }
@@ -221,10 +221,10 @@ server {
     # Rate limiting
     limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
     
-    location /app/ {
+    location /backend/ {
         limit_req zone=api_limit burst=20 nodelay;
         
-        proxy_pass http://127.0.0.1:8000/app/;
+        proxy_pass http://127.0.0.1:8000/backend/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -313,7 +313,7 @@ backend/
 - `models.py` and `logic.py` removed (dead code cleaned)
 - New `task_loader.py` + `tasks/` package for pluggable challenges
 - All static HTML served from root
-- No top-level `app/` directory in the repo layout
+- No top-level `app/` directory (the repo now uses a flat `backend/` layout)
 
 ## Development
 
