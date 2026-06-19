@@ -103,6 +103,11 @@ sudo systemctl enable myfastapi
 sudo systemctl restart myfastapi
 ```
 
+**Restarting the Service (using the service command):**
+```bash
+sudo service myfastapi restart
+```
+
 **Viewing Logs:**
 ```bash
 sudo journalctl -u myfastapi -f
