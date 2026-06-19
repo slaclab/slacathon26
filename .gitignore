@@ -52,7 +52,6 @@ coverage.xml
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -111,6 +110,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Explicit venv ignore (Python virtual environment)
+venv/
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -154,10 +156,13 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific - runtime generated
-gunicorn-*.log
 jobs.json
 leaderboard.json
 user_names.json
+
+# Log files
+*.log
+logs/
 
 # Temporary
 *.tmp
