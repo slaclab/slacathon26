@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLACATHON 2026 :: LEADERBOARD</title>
+  <style>
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Courier New', monospace;
+  color: #00ff00;
+  background: #000000;
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* scanlines + faint green grid */
+body::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: 
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 2px,
+      rgba(0, 255, 0, 0.035) 2px,
+      rgba(0, 255, 0, 0.035) 3px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(0, 180, 255, 0.015) 0px,
+      rgba(0, 180, 255, 0.015) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  background-size: 100% 4px, 100% 100%;
+  animation: scan 1.6s linear infinite;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 4px; }
+}
+
+.container {
+  max-width: 1080px;
+  margin: 26px auto;
+  padding: 22px 26px;
+  position: relative;
+  z-index: 1;
+  background: #000000;
+  border: 2px solid #00ff00;
+  box-shadow: 
+    0 0 18px rgba(0, 255, 0, 0.45),
+    inset 0 0 18px rgba(0, 255, 0, 0.06);
+}
+
+.info-bar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 7px 14px;
+  background: rgba(0, 20, 0, 0.6);
+  border: 1px solid #00aa00;
+  font-size: 0.84em;
+  color: #00cc88;
+  box-shadow: 0 0 6px rgba(0, 255, 0, 0.2);
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', monospace;
+  font-size: 13.6px;
+  background: #000000;
+}
+
+.leaderboard-table th,
+.leaderboard-table td {
+  padding: 5px 8px;
+  border: 1px solid #004400;
+  text-align: left;
+  vertical-align: top;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.leaderboard-table th {
+  background: rgba(0, 255, 0, 0.12);
+  color: #00ccff;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+  text-shadow: 0 0 6px #00ccff;
+  border-color: #00ff00;
+}
+
+.leaderboard-table tr:hover td {
+  background: rgba(0, 255, 0, 0.05);
+  border-color: #00aa00;
+}
+
+.rank {
+  width: 58px;
+  color: #00ff00;
+  font-weight: bold;
+  text-shadow: 0 0 6px #00ff00;
+}
+
+.user {
+  width: 132px;
+  font-weight: bold;
+  color: #ccffcc;
+  text-shadow: 0 0 2px #00ff00;
+}
+
+.score {
+  width: 92px;
+  color: #00ffff;
+  font-family: monospace;
+  text-shadow: 0 0 6px #00ffff;
+}
+
+.solved {
+  width: 58px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.solved-yes { color: #00ff00; text-shadow: 0 0 6px #00ff00; }
+.solved-no { color: #00aaff; text-shadow: 0 0 4px #00aaff; }
+
+.input {
+  color: #88bb88;
+  font-family: monospace;
+  font-size: 12px;
+  letter-spacing: 0.25px;
+}
+
+.timestamp {
+  color: #448844;
+  font-size: 11.3px;
+  width: 142px;
+}
+
+.loading, .empty {
+  text-align: center;
+  padding: 30px;
+  color: #448844;
+  font-style: italic;
+}
+
+a.back {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: #00aaff;
+  text-decoration: none;
+  text-shadow: 0 0 4px #00aaff;
+  transition: all 0.2s;
+}
+
+a.back:hover {
+  color: #00ffff;
+  text-shadow: 0 0 7px #00ffff;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 1.55em;
+  letter-spacing: 3.2px;
+  color: #00ff00;
+  text-shadow: 0 0 8px #00ff00, 0 0 16px #00cc88;
+}
+
+.subtitle {
+  font-size: 0.88em;
+  color: #00aaff;
+  letter-spacing: 1.4px;
+  text-shadow: 0 0 4px #00aaff;
+}
+
+.rank-1 { color: #ffff00; text-shadow: 0 0 7px #ffff00; }
+.rank-2 { color: #aaffaa; text-shadow: 0 0 5px #aaffaa; }
+.rank-3 { color: #88cc88; text-shadow: 0 0 5px #88cc88; }
+
+.refresh-info {
+  text-align: center;
+  margin-top: 7px;
+  font-size: 0.72em;
+  color: #448844;
+  letter-spacing: 1px;
+}
+
+.footer {
+  margin-top: 16px;
+  padding-top: 7px;
+  border-top: 1px solid #00aa00;
+  font-size: 0.66em;
+  color: #448844;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.blink {
+  animation: blink 1s infinite step-end;
+}
+
+@keyframes blink {
+  50% { opacity: 0.25; }
+}
+
+/* Konami overlay - green phosphor + neon blue */
+#konami-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.94);
+  color: #00ff00;
+  font-family: 'Courier New', monospace;
+  font-size: 15.2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  text-align: center;
+  padding: 12px;
+  border: 2px solid #00aaff;
+  box-shadow: 0 0 24px rgba(0, 255, 0, 0.5);
+}
+
+#konami-overlay pre {
+  line-height: 1.26;
+  color: #00ccff;
+  text-shadow: 0 0 5px #00ff00;
+}
+</style>
+</head>
+<body>
+  <div class="container">
+    <a href="/slacathon26/" class="back">← Return to Landing</a>
+
+    <div class="header">
+      <div class="title">SLACATHON 2026.</div>
+      <div class="subtitle">Leaderboard - top solutions</div>
+    </div>
+
+    <div class="info-bar">
+      <div>Entries: <span id="total-entries">0</span></div>
+      <div>TARGET: <span style="color:#00ffff">SCORE &lt; 0.001</span></div>
+      <div>LAST SYNC: <span id="last-update">—</span></div>
+    </div>
+
+    <table class="leaderboard-table">
+      <thead>
+        <tr>
+          <th>RANK</th>
+          <th>USER</th>
+          <th>SCORE</th>
+          <th>SOLVED</th>
+          <th id="input-header">INPUT</th>
+          <th>TIMESTAMP</th>
+        </tr>
+      </thead>
+      <tbody id="leaderboard-body">
+        <tr><td colspan="6" class="loading">ACCESSING ARCHIVE...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="refresh-info">
+      <span>Live feed</span> — AUTO-REFRESH 5s
+    </div>
+
+    <div class="footer">
+      SLAC AI CHALLENGE 2026 — BUILT BY HUMANS<br>
+      ACCESS TEAM NODE: <a href="/slacathon26/team" style="color:#00aaff; text-decoration:none;">/slacathon26/team</a><br>
+      STATUS: <span class="blink" style="color:#00ff00;">ONLINE</span>
+    </div>
+  </div>
+
+  <script>
+    function formatTimestamp(ts) {
+      if (!ts) return '—';
+      const d = new Date(ts * 1000);
+      return d.toLocaleString('en-US', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+      });
+    }
+
+    function formatInput(inp) {
+      if (!inp) return '—';
+      if (Array.isArray(inp)) {
+        if (currentLabels && currentLabels.length) {
+          return currentLabels.map((label, i) => {
+            const v = inp[i];
+            const val = (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—');
+            return `${label}:${val}`;
+          }).join(', ');
+        }
+        return inp.map(v => (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—')).join(', ');
+      }
+      if (typeof inp === 'object') {
+        if (currentLabels && currentLabels.length) {
+          return currentLabels.map(label => {
+            const v = inp[label];
+            const val = (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—');
+            return `${label}:${val}`;
+          }).join(', ');
+        }
+        return Object.entries(inp).map(([k,v]) => {
+          const val = (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—');
+          return `${k}:${val}`;
+        }).join(', ');
+      }
+      return String(inp);
+    }
+
+    let currentLabels = null;
+
+    async function fetchLeaderboard() {
+      try {
+        const res = await fetch('/slacathon26/leaderboard');
+        if (!res.ok) throw new Error('bad status');
+        const data = await res.json();
+
+        document.getElementById('total-entries').textContent = data.total_entries || 0;
+        document.getElementById('last-update').textContent = new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+
+        const tbody = document.getElementById('leaderboard-body');
+        tbody.innerHTML = '';
+
+        if (!data.leaderboard || data.leaderboard.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty">NO ENTRIES IN THE ARCHIVE — BE THE FIRST TO TUNE</td></tr>';
+          return;
+        }
+
+        data.leaderboard.forEach((entry, idx) => {
+          const rank = idx + 1;
+          let rankDisplay = rank;
+          let rankClass = '';
+          if (rank === 1) { rankDisplay = '★ ' + rank; rankClass = 'rank-1'; }
+          else if (rank === 2) { rankDisplay = '◆ ' + rank; rankClass = 'rank-2'; }
+          else if (rank === 3) { rankDisplay = '◇ ' + rank; rankClass = 'rank-3'; }
+
+          const solvedHtml = entry.solved 
+            ? '<span class="solved-yes">YES</span>' 
+            : '<span class="solved-no">NO</span>';
+
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="rank ${rankClass}">${rankDisplay}</td>
+            <td class="user">${entry.user || 'anonymous'}</td>
+            <td class="score">${Number(entry.score).toFixed(6)}</td>
+            <td class="solved">${solvedHtml}</td>
+            <td class="input">${formatInput(entry.input)}</td>
+            <td class="timestamp">${formatTimestamp(entry.timestamp)}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        const tbody = document.getElementById('leaderboard-body');
+        let msg = 'ARCHIVE ERROR';
+        if (err.message) msg += ' [' + err.message + ']';
+        tbody.innerHTML = `<tr><td colspan="6" class="empty" style="color:#ff6666">${msg}</td></tr>`;
+        console.error('Leaderboard fetch failed:', err);
+      }
+    }
+
+    // Initial load
+    fetchLeaderboard();
+
+    // Auto-refresh every 5 seconds
+    setInterval(fetchLeaderboard, 5000);
+
+    // Fetch task info for dynamic labels
+    async function updateInputHeader() {
+      try {
+        const res = await fetch('/slacathon26/task');
+        if (res.ok) {
+          const task = await res.json();
+          currentLabels = task.parameter_labels || null;
+          const header = document.getElementById('input-header');
+          if (header && currentLabels && currentLabels.length) {
+            header.textContent = 'INPUT [' + currentLabels.join(', ') + ']';
+          }
+          // Re-render immediately so legacy array inputs format correctly
+          fetchLeaderboard();
+        }
+      } catch (e) {}
+    }
+    updateInputHeader();
+
+    // Konami code easter egg
+    const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
+    let konamiIndex = 0;
+
+    document.addEventListener('keydown', (e) => {
+      if (e.code === konamiCode[konamiIndex]) {
+        konamiIndex++;
+        if (konamiIndex === konamiCode.length) {
+          activateCredits();
+          konamiIndex = 0;
+        }
+      } else {
+        konamiIndex = 0;
+      }
+    });
+
+    function activateCredits() {
+      const overlay = document.createElement('div');
+      overlay.id = 'konami-overlay';
+      overlay.innerHTML = `
+        <pre>
+╔═══════════════════════════════╗
+║ SLACATHON 2026 // CODED BY    ║
+║    [ELITE HUMANS '26]         ║
+║ SERIAL: SL4C-4TH0N-1962-HACK  ║
+║ GREETZ FROM: balticfish       ║
+║                               ║
+║ ACCESS TEAM: /slacathon26/team║
+║                               ║
+║ Press ESC to exit...          ║
+╚═══════════════════════════════╝
+        </pre>
+      `;
+      document.body.appendChild(overlay);
+
+      const audio = new Audio('https://halavanau.group/chiptune.mp3');
+      audio.play().catch(() => {});
+
+      const closeHandler = (e) => {
+        if (e.code === 'Escape') {
+          overlay.remove();
+          audio.pause();
+          document.removeEventListener('keydown', closeHandler);
+        }
+      };
+      document.addEventListener('keydown', closeHandler, { once: true });
+    }
+  </script>
+</body>
+</html>

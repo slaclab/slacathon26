@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLACATHON 2026 - Platform demonstrator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Prevent flicker/scrollbar from the beam pulse exiting the viewport */
+    html, body {
+      overflow-x: hidden;
+    }
+
+    /* Beam element - full-width horizontal neon line at top with left-to-right travelling pulse */
+    .beam {
+      position: absolute;
+      top: 70px;
+      left: 0;
+      right: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        #a78bfa 15%,
+        #c026ff 50%,
+        #a78bfa 85%,
+        transparent 100%
+      );
+      box-shadow: 0 0 6px #a78bfa, 0 0 14px #c026ff;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .beam .pulse {
+      position: absolute;
+      top: -2px;
+      left: 0;
+      width: 60px;
+      height: 6px;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        #c026ff 25%,
+        #ffffff 50%,
+        #c026ff 75%,
+        transparent 100%
+      );
+      box-shadow: 0 0 8px #ffffff, 0 0 18px #c026ff;
+      opacity: 0.9;
+      animation: pulse-travel 2.8s linear infinite;
+      will-change: transform;
+    }
+
+    @keyframes pulse-travel {
+      0% { transform: translateX(-60px); }
+      100% { transform: translateX(100vw); }
+    }
+
+    .title-glow {
+      text-shadow: 0 0 8px rgb(167 139 250 / 0.65), 0 0 22px rgb(167 139 250 / 0.45), 0 0 38px rgb(192 132 252 / 0.3);
+      animation: title-glow 2.2s ease-in-out infinite alternate;
+    }
+    @keyframes title-glow {
+      from { text-shadow: 0 0 6px rgb(167 139 250 / 0.5), 0 0 16px rgb(167 139 250 / 0.35), 0 0 28px rgb(192 132 252 / 0.25); }
+      to { text-shadow: 0 0 12px rgb(167 139 250 / 0.75), 0 0 28px rgb(167 139 250 / 0.55), 0 0 48px rgb(192 132 252 / 0.4); }
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            'mono': ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', '"Liberation Mono"', '"Courier New"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-white scroll-smooth">
+  <!-- Beam element - horizontal neon line with left-to-right travelling pulse -->
+  <div class="beam">
+    <div class="pulse"></div>
+  </div>
+  <div class="max-w-5xl mx-auto px-6">
+    <!-- Hero -->
+    <div class="min-h-[80vh] flex flex-col items-center justify-center text-center pt-12">
+      <h1 class="title-glow text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-semibold tracking-tighter text-white">SLACATHON 2026 - demo</h1>
+
+      <div class="mt-12 flex flex-wrap items-center justify-center gap-3">
+        <!-- About the challenge first -->
+        <a href="#the-event" 
+           class="px-8 py-3.5 rounded-full border border-violet-600 text-violet-300 hover:bg-violet-950 hover:border-violet-500 text-sm font-medium tracking-wide transition">
+          About the challenge
+        </a>
+
+        <a href="#categories" 
+           class="px-8 py-3.5 rounded-full border border-violet-600 text-violet-300 hover:bg-violet-950 hover:border-violet-500 text-sm font-medium tracking-wide transition">
+          Categories
+        </a>
+
+        <a href="https://github.com/balticfish/slacathon26/" target="_blank" 
+           class="px-8 py-3.5 rounded-full bg-white text-zinc-950 hover:bg-zinc-100 font-semibold text-sm tracking-wide transition">
+          Build
+        </a>
+
+        <a href="board" 
+           class="px-8 py-3.5 rounded-full border border-white/60 hover:bg-white/5 hover:border-white/70 text-sm font-medium tracking-wide transition">
+          Leaderboard
+        </a>
+      </div>
+    </div>
+
+    <!-- The Event -->
+    <div id="the-event" class="max-w-3xl mx-auto pt-32 pb-24">
+      <h2 class="text-5xl font-semibold tracking-tighter mb-8">The Event</h2>
+
+      <div class="max-w-none text-lg text-zinc-300 space-y-7 leading-relaxed">
+        <p>
+          SLACATHON 2026 - Demo is an AI hackathon platform demonstrator. 
+          The challenge asks potential participants to apply modern machine learning tools to solving real world accelerator problems: 
+          tuning the parameters of a particle accelerator beamline for better performance.
+        </p>
+
+        <p>
+          Teams are asked to develop algorithms for: round-to-flat beam transform, emittance tuning, FEL taper optimization, data visualization.
+        </p>
+
+        <p>
+          The platform provides a production environment with asynchronous job validation, per-user submission quotas, 
+          automatic duplicate detection, full job history, and a public API to work on actual accelerator problems.
+        </p>
+      </div>
+
+      <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+        <div class="rounded-2xl border border-white/10 p-5 bg-zinc-900/60">
+          <div class="font-medium text-violet-400 mb-1 tracking-wide">Bayesian Optimization</div>
+          <div class="text-zinc-400">Teams are encouraged to use BO to intelligently sample the search space.</div>
+        </div>
+        <div class="rounded-2xl border border-white/10 p-5 bg-zinc-900/60">
+          <div class="font-medium text-violet-400 mb-1 tracking-wide">Realistic Physics</div>
+          <div class="text-zinc-400">Teams will be provided with high-fidelity numerical models and objective functions derived from actual SLAC systems.</div>
+        </div>
+        <div class="rounded-2xl border border-white/10 p-5 bg-zinc-900/60">
+          <div class="font-medium text-violet-400 mb-1 tracking-wide">Online Leaderboard</div>
+          <div class="text-zinc-400">Live leaderboard ranking every submission.</div>
+        </div>
+      </div>
+
+      <div class="mt-12 text-sm text-zinc-500 border-t border-white/10 pt-8">
+        Open to students, researchers, and AI practitioners. Build the best optimizer and climb the leaderboard.
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div id="categories" class="max-w-3xl mx-auto pt-12 pb-24">
+      <h2 class="text-5xl font-semibold tracking-tighter mb-8">Categories</h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="rounded-2xl border border-white/10 p-6 bg-zinc-900/60">
+          <h3 class="text-xl font-semibold text-violet-400 mb-3">Beamline guru</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            Beamline gurus are the ultimate masters of accelerator tuning. They specialize in optimizing the full beamline 
+            parameters — from emittance and beam size to round-to-flat beam transforms.
+          </p>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 p-6 bg-zinc-900/60">
+          <h3 class="text-xl font-semibold text-violet-400 mb-3">FEL whisperer</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            FEL whisperers possess a unique talent for Free-Electron Laser optimization. They know how to generate maximum pulse energy by adjusting the undulator tapering.
+          </p>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 p-6 bg-zinc-900/60">
+          <h3 class="text-xl font-semibold text-violet-400 mb-3">M.A.R.S. explorer</h3>
+          <p class="text-sm text-zinc-400 leading-relaxed">
+            M.A.R.S. explorers venture deep into the Multi-modal Accelerator Real-time System. They combine agentic Skills, 
+            simulation, and data visualization to display the most complex regions of machine parameter space.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
