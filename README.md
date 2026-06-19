@@ -127,9 +127,9 @@ server {
     # Redirect HTTP to HTTPS (optional, after SSL setup)
     # return 301 https://$server_name$request_uri;
 
-    # Main application at /backend
-    location /backend/ {
-        proxy_pass http://127.0.0.1:8000/backend/;
+    # Main application at /slacathon26
+    location /slacathon26/ {
+        proxy_pass http://127.0.0.1:8000/slacathon26/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -154,8 +154,8 @@ server {
     }
 
     # Optional: Health check endpoint
-    location /health {
-        proxy_pass http://127.0.0.1:8000/backend/health;
+    location /slacathon26/health {
+        proxy_pass http://127.0.0.1:8000/slacathon26/health;
         access_log off;
     }
 }
@@ -221,10 +221,10 @@ server {
     # Rate limiting
     limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
     
-    location /backend/ {
+    location /slacathon26/ {
         limit_req zone=api_limit burst=20 nodelay;
         
-        proxy_pass http://127.0.0.1:8000/backend/;
+        proxy_pass http://127.0.0.1:8000/slacathon26/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
