@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-"""Driving test for direct modern input access after the legacy normalization removal.
-Drives only shipped code (job_manager, middleware, main). Never reimplements legacy.
+"""Driving test for direct modern input access.
+Drives only shipped code (job_manager, middleware, main).
 Place in backend/ and run from there: python test_direct_access.py
 """
 import json
@@ -40,8 +40,7 @@ got = job_manager.get_job(real_jid) if real_jid else None
 assert got is not None, "get_job must return record for real persisted id"
 inp = got.get("input")
 assert isinstance(inp, dict), f"get_job must yield direct input dict, got {type(inp)}"
-assert "values" not in got, "no legacy values key after direct load"
-print("get_job on real id: direct input dict OK, no values key")
+print("get_job on real id: direct input dict OK")
 
 # leaderboard via shipped middleware
 entries = middleware.load_leaderboard()

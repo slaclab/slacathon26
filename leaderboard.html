@@ -297,16 +297,6 @@ a.back:hover {
 
     function formatInput(inp) {
       if (!inp) return '—';
-      if (Array.isArray(inp)) {
-        if (currentLabels && currentLabels.length) {
-          return currentLabels.map((label, i) => {
-            const v = inp[i];
-            const val = (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—');
-            return `${label}:${val}`;
-          }).join(', ');
-        }
-        return inp.map(v => (typeof v === 'number') ? v.toFixed(2) : (v != null ? v : '—')).join(', ');
-      }
       if (typeof inp === 'object') {
         if (currentLabels && currentLabels.length) {
           return currentLabels.map(label => {
@@ -391,7 +381,6 @@ a.back:hover {
           if (header && currentLabels && currentLabels.length) {
             header.textContent = 'INPUT [' + currentLabels.join(', ') + ']';
           }
-          // Re-render immediately so legacy array inputs format correctly
           fetchLeaderboard();
         }
       } catch (e) {}
