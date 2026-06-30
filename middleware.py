@@ -5,9 +5,13 @@ import logging
 import time
 import json
 import os
-import uuid
 import threading
 import numpy as np
+
+from settings import settings
+
+from task_loader import load_active_task
+# Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
 
 
 logging.basicConfig(
@@ -16,43 +20,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Try to get labels for legacy list->dict normalization of old leaderboard data
-_TASK_INPUT_LABELS = None
-try:
-    from task_loader import load_active_task
-    _TASK_INPUT_LABELS = getattr(load_active_task(), "INPUT_LABELS", None)
-except Exception:
-    pass
-
-MAX_QUERIES_PER_USER = 10
-MAX_VALIDATIONS_PER_USER = 10000
-LEADERBOARD_SIZE = 15
-LEADERBOARD_FILE = "leaderboard.json"
-USER_NAMES_FILE = "user_names.json"
-
-user_validation_counts: Dict[str, int] = {}
-
-
-def consume_validation_quota(user_id: str) -> int:
-    current = user_validation_counts.get(user_id, 0)
-    if current >= MAX_VALIDATIONS_PER_USER:
-        raise RuntimeError(
-            f"Validation limit of {MAX_VALIDATIONS_PER_USER} reached for this API key"
-        )
-    user_validation_counts[user_id] = current + 1
-    return MAX_VALIDATIONS_PER_USER - (current + 1)
+MAX_QUERIES_PER_USER = settings.max_queries_per_user
+LEADERBOARD_SIZE = settings.leaderboard_size
+LEADERBOARD_FILE = settings.leaderboard_file
+USER_NAMES_FILE = settings.user_names_file
 
 def _load_valid_api_keys() -> set:
-    env_keys = os.environ.get("SLACATHON_API_KEYS")
-    if env_keys:
-        keys = {k.strip() for k in env_keys.replace(",", " ").split() if k.strip()}
-        if keys:
-            logger.info(f"Loaded {len(keys)} API key(s) from SLACATHON_API_KEYS environment variable")
-            return keys
+    if settings.api_keys:
+        keys = set(settings.api_keys)
+        logger.info(f"Loaded {len(keys)} API key(s) from settings")
+        return keys
 
     logger.warning(
-        "SLACATHON_API_KEYS not set. Using hardcoded development keys. "
-        "This is insecure — set the environment variable for any real use."
+        "No API keys configured in settings. Using hardcoded development keys. "
+        "This is insecure — set SLACATHON_API_KEYS in your environment."
     )
     return {"key_123", "key_456", "key_789"}
 
@@ -120,12 +101,9 @@ class LeaderboardEntry:
     
     @classmethod
     def from_dict(cls, data: dict):
-        inp = data.get("input")
-        if inp is None:
-            inp = data.get("values", {})
-        # Normalize legacy array inputs to dict using current task labels
-        if isinstance(inp, list) and _TASK_INPUT_LABELS and len(inp) == len(_TASK_INPUT_LABELS):
-            inp = {label: val for label, val in zip(_TASK_INPUT_LABELS, inp)}
+        inp = data.get("input") or {}
+        if not isinstance(inp, dict):
+            inp = {}
         return cls(
             user_id=data["user_id"],
             input=inp,
@@ -179,145 +157,6 @@ class UserSubmissionTracker:
 
 user_tracker = UserSubmissionTracker(MAX_QUERIES_PER_USER)
 
-JOBS_FILE = "jobs.json"
-jobs: dict = {}
-jobs_lock = threading.RLock()
-append_lock = threading.Lock()
-
-def load_jobs():
-    global jobs
-    jobs = {}
-    if not os.path.exists(JOBS_FILE):
-        logger.info("No existing jobs file found, starting fresh")
-        return
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        recent_lines = lines[-300:]
-        for line in recent_lines:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                job = json.loads(line)
-                if isinstance(job, dict) and "job_id" in job:
-                    if "input" not in job and "values" in job:
-                        job["input"] = job.pop("values")
-                    jobs[job["job_id"]] = job
-            except Exception:
-                continue
-        logger.info(f"Loaded {len(jobs)} recent jobs into memory (full history kept in the file)")
-
-        global user_validation_counts
-        user_validation_counts = {}
-        try:
-            with open(JOBS_FILE, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        job = json.loads(line)
-                        uid = job.get("user_id")
-                        if uid:
-                            user_validation_counts[uid] = user_validation_counts.get(uid, 0) + 1
-                    except Exception:
-                        continue
-        except Exception:
-            pass
-
-    except Exception as e:
-        logger.error(f"Failed to load jobs: {e}")
-        jobs = {}
-
-def _append_job_record(job_record: dict):
-    try:
-        with append_lock:
-            with open(JOBS_FILE, "a") as f:
-                f.write(json.dumps(job_record) + "\n")
-    except Exception as e:
-        logger.error(f"Failed to append job record: {e}")
-
-def get_job(job_id: str) -> dict | None:
-    with jobs_lock:
-        if job_id in jobs:
-            return jobs[job_id]
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                if rec.get("job_id") == job_id:
-                    if "input" not in rec and "values" in rec:
-                        rec["input"] = rec.pop("values")
-                    with jobs_lock:
-                        jobs[job_id] = rec
-                    return rec
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
-
-load_jobs()
-
-def create_job(user_id: str, input_data: dict) -> str:
-    remaining_after = consume_validation_quota(user_id)
-
-    job_id = str(uuid.uuid4())
-    job_record = {
-        "job_id": job_id,
-        "user_id": user_id,
-        "input": input_data,
-        "status": "processing",
-        "result": None,
-        "created_at": time.time(),
-        "completed_at": None
-    }
-    with jobs_lock:
-        jobs[job_id] = job_record
-    _append_job_record(job_record)
-
-    logger.info(f"Created job {job_id} for user {get_display_name(user_id)} "
-                f"(used {MAX_VALIDATIONS_PER_USER - remaining_after}/{MAX_VALIDATIONS_PER_USER})")
-    return job_id
-
-def make_json_safe(obj):
-    import math
-    if isinstance(obj, dict):
-        return {k: make_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [make_json_safe(v) for v in obj]
-    if isinstance(obj, (np.integer, np.floating)):
-        val = float(obj)
-        if not math.isfinite(val):
-            return 1.0e10
-        return val
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, float):
-        if not math.isfinite(obj):
-            return 1.0e10
-        return obj
-    return obj
-
-def complete_job(job_id: str, result: dict):
-    safe_result = make_json_safe(result)
-    job_record = None
-    with jobs_lock:
-        if job_id in jobs:
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["result"] = safe_result
-            jobs[job_id]["completed_at"] = time.time()
-            job_record = dict(jobs[job_id])
-    if job_record:
-        _append_job_record(job_record)
-        logger.info(f"Job {job_id} completed with score {safe_result.get('score')}")
-
 
 def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     global leaderboard
@@ -330,7 +169,13 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     entry = LeaderboardEntry(user_id, input, score, solved, time.time())
     leaderboard.append(entry)
     
-    leaderboard.sort(key=lambda x: x.score)
+    # Sort respecting task direction (lower better if minimize)
+    try:
+        task = load_active_task()
+        minimize = getattr(task, "MINIMIZE", True)
+    except Exception:
+        minimize = True
+    leaderboard.sort(key=lambda x: x.score, reverse=not minimize)
     leaderboard = leaderboard[:LEADERBOARD_SIZE]
     
     display_name = get_display_name(user_id)
