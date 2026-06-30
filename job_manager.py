@@ -41,9 +41,6 @@ def load_jobs():
             try:
                 job = json.loads(line)
                 if isinstance(job, dict) and "job_id" in job:
-                    job["input"] = job.get("input") or {}
-                    if not isinstance(job.get("input"), dict):
-                        job["input"] = {}
                     jobs[job["job_id"]] = job
             except Exception:
                 continue
@@ -79,9 +76,6 @@ def get_job(job_id: str) -> dict | None:
             try:
                 rec = json.loads(line)
                 if rec.get("job_id") == job_id:
-                    rec["input"] = rec.get("input") or {}
-                    if not isinstance(rec.get("input"), dict):
-                        rec["input"] = {}
                     with jobs_lock:
                         jobs[job_id] = rec
                     return rec
@@ -104,9 +98,9 @@ def create_job(user_id: str, input_data: dict) -> str:
         "created_at": time.time(),
         "completed_at": None
     }
+    charge_validation_quota(user_id, record=job_record)
     with jobs_lock:
         jobs[job_id] = job_record
-    charge_validation_quota(user_id, record=job_record)
     logger.info(f"Created job {job_id} for user {user_id}")
     return job_id
 
@@ -164,6 +158,7 @@ def get_user_validation_counts() -> dict:
     counts = {}
     if not os.path.exists(JOBS_FILE):
         return counts
+    seen = {}
     try:
         with open(JOBS_FILE, 'r') as f:
             for line in f:
@@ -173,8 +168,12 @@ def get_user_validation_counts() -> dict:
                 try:
                     job = json.loads(line)
                     uid = job.get("user_id")
-                    if uid:
-                        counts[uid] = counts.get(uid, 0) + 1
+                    jid = job.get("job_id")
+                    if uid and jid:
+                        # count unique jobs per user (file has process+complete lines)
+                        if (uid, jid) not in seen:
+                            seen[(uid, jid)] = True
+                            counts[uid] = counts.get(uid, 0) + 1
                 except Exception:
                     continue
     except Exception:

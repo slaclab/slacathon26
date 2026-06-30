@@ -8,20 +8,24 @@ from middleware import (
     add_to_leaderboard,
     get_leaderboard,
     get_display_name,
+)
+from job_manager import (
     create_job,
     get_job,
     complete_job,
     make_json_safe,
-    consume_validation_quota,
-    MAX_VALIDATIONS_PER_USER,
-    user_validation_counts,
+    charge_validation_quota,
+    get_quota_info,
 )
 import asyncio
 import logging
+import time
+
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(root_path="/slacathon26")
+app = FastAPI(root_path=settings.root_path)
 
 TASK = load_active_task()
 logger.info(f"Loaded task: {getattr(TASK, 'TASK_NAME', 'Unknown')}")
@@ -60,6 +64,10 @@ async def get_task_info():
         "result_schema": TASK.Result.model_json_schema(),
         "parameter_labels": getattr(TASK, "INPUT_LABELS", None),
         "bounds": getattr(TASK, "BOUNDS", None),
+        "target": getattr(TASK, "TARGET", None),
+        "minimize": getattr(TASK, "MINIMIZE", None),
+        "failure_score": getattr(TASK, "FAILURE_SCORE", None),
+        "max_validations_per_user": getattr(TASK, "MAX_VALIDATIONS_PER_USER", None),
     }
 
 @app.get("/team")
@@ -112,7 +120,11 @@ async def submit_result(
     logger.info(f"Submitted input: {input_data}")
     
     try:
-        consume_validation_quota(api_key)
+        # charge via single primitive: minimal record for submit path (persisted, counted on restart)
+        charge_validation_quota(
+            api_key,
+            record={"user_id": api_key, "kind": "submit", "created_at": time.time()}
+        )
 
         validated_input = TASK.Input(**input_data)
         result = TASK.validate(validated_input).model_dump()
@@ -162,7 +174,7 @@ async def run_validation_job(job_id: str, input_data: dict):
         if job:
             complete_job(job_id, {
                 "solved": False,
-                "score": 1.0e10,
+                "score": getattr(TASK, "FAILURE_SCORE", 1.0e10),
                 "message": f"Job failed: {str(e)}",
                 "evaltime": 0.0
             })
@@ -189,16 +201,11 @@ async def validate(
 
         logger.info(f"Validation job {job_id} enqueued for user {get_display_name(api_key)}")
 
-        used = user_validation_counts.get(api_key, 0)
         return {
             "job_id": job_id,
             "status": "processing",
             "message": "Submission recorded. Validation is running in the background (this can take time). Poll GET /jobs/{job_id} to retrieve the result when ready.",
-            "quota": {
-                "used": used,
-                "limit": MAX_VALIDATIONS_PER_USER,
-                "remaining": max(0, MAX_VALIDATIONS_PER_USER - used)
-            }
+            "quota": get_quota_info(api_key)
         }
     except RuntimeError as e:
         raise HTTPException(status_code=429, detail=str(e))
@@ -225,18 +232,14 @@ async def get_job_status(
         "job_id": job["job_id"],
         "status": job["status"],
         "created_at": job["created_at"],
+        "input": job.get("input"),
     }
 
     if job["status"] == "completed" and job.get("result"):
         response["result"] = make_json_safe(job["result"])
         response["completed_at"] = job.get("completed_at")
 
-    used = user_validation_counts.get(api_key, 0)
-    response["quota"] = {
-        "used": used,
-        "limit": MAX_VALIDATIONS_PER_USER,
-        "remaining": max(0, MAX_VALIDATIONS_PER_USER - used)
-    }
+    response["quota"] = get_quota_info(api_key)
 
     return response
 

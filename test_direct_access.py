@@ -65,7 +65,7 @@ print("TestClient /validate created jid:", (jid or "")[:8], "...")
 # poll the job
 j = c.get(f"/jobs/{jid}", headers={"X-API-Key": "key_123"}).json()
 assert "status" in j, "job fetch works"
-assert isinstance(j.get("input"), dict) or j.get("input") is None, "job response input modern"
+assert "input" in j and isinstance(j.get("input"), dict), "real /jobs API must return modern input dict"
 print("TestClient /jobs/{id} modern input path OK")
 
 lb = c.get("/leaderboard").json()

@@ -17,6 +17,10 @@ class Task(Protocol):
     TASK_NAME: str
     INPUT_LABELS: list[str]
     BOUNDS: list[tuple[float, float]]
+    TARGET: float
+    MINIMIZE: bool
+    FAILURE_SCORE: float
+    MAX_VALIDATIONS_PER_USER: int
 
     def validate(self, data: BaseModel) -> BaseModel:
         ...

@@ -159,3 +159,10 @@ def validate(data: Input) -> Result:
             message=f"Objective is {res}, expected minimal (less than 1e-4)",
             evaltime=dt
         )
+
+
+# Task protocol constants (required by task_loader + job_manager)
+TARGET = 0.0
+MINIMIZE = True
+FAILURE_SCORE = 1.0e10
+MAX_VALIDATIONS_PER_USER = 10000

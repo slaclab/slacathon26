@@ -101,7 +101,7 @@ class LeaderboardEntry:
     
     @classmethod
     def from_dict(cls, data: dict):
-        inp = data.get("input") or {}
+        inp = data.get("input", {})
         if not isinstance(inp, dict):
             inp = {}
         return cls(
