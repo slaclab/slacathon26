@@ -40,6 +40,15 @@ with open("team.html", "r") as f:
     team_page_html = f.read()
 
 
+def _extract_input_data(body: dict) -> dict:
+    """Shared helper to extract input from either {"input": <obj>} or flat object.
+    Supports both wrapped and direct input formats used by clients.
+    """
+    if "input" in body:
+        return body["input"]
+    return body
+
+
 @app.get("/")
 async def root():
     logger.info("Root endpoint accessed")
@@ -115,7 +124,7 @@ async def submit_result(
     body: dict = Body(...),
     api_key: str = Depends(verify_api_key)
 ):
-    input_data = body.get("input", body)
+    input_data = _extract_input_data(body)
     logger.info(f"Leaderboard submission from user: {get_display_name(api_key)}")
     logger.info(f"Submitted input: {input_data}")
     
@@ -185,7 +194,7 @@ async def validate(
     api_key: str = Depends(verify_api_key),
     tracker: UserSubmissionTracker = Depends(get_tracker)
 ):
-    input_data = body.get("input", body)
+    input_data = _extract_input_data(body)
     logger.info(f"Validation job request received from user: {get_display_name(api_key)}")
     logger.info(f"Submitted input: {input_data}")
 
