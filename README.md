@@ -13,7 +13,18 @@ Each task defines:
 - Dynamic validation using per-task Pydantic models
 - Example: Beamline Guru (default)
 
-See the live site and GPOptimizer client for usage examples.
+See the live site and optimizer clients (GPOptimizer.py, XoptOptimizer.py) for usage examples.
+
+**Optimizer examples dependencies:**
+- `GPOptimizer.py`: `pip install numpy scipy scikit-learn`
+- `XoptOptimizer.py`: `pip install xopt numpy requests` (Xopt provides modern Bayesian optimization)
+
+## Authors
+
+- A. Halavanau (SLAC)
+- C.J. Takacs (ex-SLAC)
+- Claude Code
+- Grok Build
 
 ## Installation
 
@@ -67,8 +78,10 @@ backend/
 │   ├── flat_beam.py        # Default task (RTFB round-to-flat beam optimization)
 │   ├── fort.1              # Physics data file (for flat beam task)
 │   └── __init__.py
-├── GPOptimizer.py          # Gaussian Process optimizer client example
-├── optimize_usage.py       # Optimization script example (with input patching)
+├── GPOptimizer.py          # Gaussian Process optimizer client example (sklearn)
+├── XoptOptimizer.py        # Xopt-based Bayesian optimizer client example
+├── optimize_usage.py       # GP optimization script example (with input patching)
+├── optimize_xopt_usage.py  # Xopt optimization script example (with input patching)
 ├── usage.py                # Simple validation client example
 ├── start.sh                # Launcher (activates venv + gunicorn, respects SLACATHON_*)
 ├── .env.example
@@ -155,7 +168,7 @@ Use `X-API-Key` header for protected endpoints. Quota limits (`MAX_VALIDATIONS_P
 - 📊 Dynamic input schema (`GET /task`)
 - 📈 Job-based validation + full history
 - 🏆 Leaderboard with duplicate detection
-- 🧪 Example GP optimizer client (GPOptimizer.py)
+- 🧪 Example optimizer clients: GPOptimizer.py (sklearn GP) and XoptOptimizer.py (Xopt package)
 
 ## License
 
