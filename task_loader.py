@@ -1,5 +1,5 @@
 """
-Active task loaded via SLACATHON_ACTIVE_TASK (settings / env / .env, default "beamline").
+Active task loaded via SLACATHON_ACTIVE_TASK (settings / env / .env, default "flat_beam").
 
 Task modules must provide: Input, Result, TASK_NAME, INPUT_LABELS, BOUNDS, TARGET, MINIMIZE,
 FAILURE_SCORE, MAX_VALIDATIONS_PER_USER, validate.

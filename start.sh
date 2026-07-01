@@ -8,7 +8,7 @@
 # Or create a .env file (see .env.example) and it will be sourced automatically.
 #
 # To switch task logic:
-#   export ACTIVE_TASK=beamline   # or fel, mars, etc. (see tasks/ dir)
+#   export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see tasks/ dir)
 #
 
 set -e
@@ -22,7 +22,7 @@ if [ -f .env ]; then
     echo "Loaded environment from .env"
 fi
 
-# Switch tasks: export ACTIVE_TASK=beamline  (or fel/mars)
+# Switch tasks: export SLACATHON_ACTIVE_TASK=flat_beam  (or fel/mars)
 # See tasks/ and GET /task for schema.
 
 # Activate virtualenv and start the server

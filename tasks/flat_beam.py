@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import time
 from pydantic import BaseModel
 
@@ -37,7 +38,7 @@ def readsigma4(fname):
 
 
 L = 0.15
-fname = 'fort.1'
+fname = os.path.join(os.path.dirname(__file__), "fort.1")
 sigma4 = readsigma4(fname)
 
 

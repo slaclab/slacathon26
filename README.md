@@ -2,7 +2,7 @@
 
 Framework for hosting AI optimization hackathons (e.g. beam physics challenges).
 
-Supports **pluggable tasks** via the `tasks/` directory. Switch the active task with the `SLACATHON_ACTIVE_TASK` environment variable (or in `.env`, defaults to `beamline`).
+Supports **pluggable tasks** via the `tasks/` directory. Switch the active task with the `SLACATHON_ACTIVE_TASK` environment variable (or in `.env`, defaults to `flat_beam`).
 
 Each task defines:
 - Input schema (Pydantic)
@@ -35,7 +35,7 @@ pip install numpy scipy fastapi uvicorn gunicorn
 cp .env.example .env
 # Edit .env and set at minimum:
 #   SLACATHON_API_KEYS=your_strong_key_1,your_strong_key_2
-#   SLACATHON_ACTIVE_TASK=beamline
+#   SLACATHON_ACTIVE_TASK=flat_beam
 ```
 
 All settings use the `SLACATHON_` prefix (see `.env.example` for full list: keys, host/port, files, limits, root_path, etc.).
@@ -64,14 +64,14 @@ backend/
 ├── task_loader.py          # Loads active task from tasks/ dir (enforces Task protocol)
 ├── tasks/
 │   ├── base.py             # TaskInput, TaskResult, Task protocol (TARGET, MINIMIZE, FAILURE_SCORE, ...)
-│   ├── beamline.py         # Default task (RTFB round-to-flat beam optimization)
+│   ├── flat_beam.py        # Default task (RTFB round-to-flat beam optimization)
+│   ├── fort.1              # Physics data file (for flat beam task)
 │   └── __init__.py
 ├── GPOptimizer.py          # Gaussian Process optimizer client example
 ├── optimize_usage.py       # Optimization script example (with input patching)
 ├── usage.py                # Simple validation client example
 ├── start.sh                # Launcher (activates venv + gunicorn, respects SLACATHON_*)
 ├── .env.example
-├── fort.1                  # Physics data file (for beamline task)
 ├── index.html              # Landing / hero page
 ├── leaderboard.html        # Leaderboard UI (dynamic labels + target via /task)
 ├── team.html
@@ -121,13 +121,13 @@ gunicorn -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 \
 To switch tasks (pluggable system):
 
 ```bash
-export SLACATHON_ACTIVE_TASK=beamline   # or fel, mars, etc. (see tasks/ dir)
+export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see tasks/ dir)
 ./start.sh
 ```
 
 Or set it in `.env`:
 ```env
-SLACATHON_ACTIVE_TASK=beamline
+SLACATHON_ACTIVE_TASK=flat_beam
 ```
 
 `GET /task` returns the current task's input schema, parameter labels, bounds, **target**, **minimize** direction, `failure_score`, and `max_validations_per_user`. Tasks define these values.
