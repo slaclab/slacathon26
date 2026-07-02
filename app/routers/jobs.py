@@ -4,6 +4,8 @@ import logging
 import time
 
 from app.core.middleware import verify_api_key, get_tracker, UserSubmissionTracker, get_display_name
+from app.db import get_session
+from sqlmodel import Session as DBSession
 from app.core.job_manager import (
     create_job,
     get_job,
@@ -87,12 +89,13 @@ async def validate(
 @router.post("/submit")
 async def submit_result(
     body: dict = Body(...),
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Depends(verify_api_key),
+    session: DBSession = Depends(get_session),
 ):
     from app.core.middleware import add_to_leaderboard, get_leaderboard
     TASK = load_active_task()
     input_data = _extract_input_data(body)
-    logger.info(f"Leaderboard submission from user: {get_display_name(api_key)}")
+    logger.info(f"Leaderboard submission from user: {get_display_name(api_key, session)}")
     logger.info(f"Submitted input: {input_data}")
 
     try:
@@ -109,11 +112,12 @@ async def submit_result(
             user_id=api_key,
             input=input_data,
             score=result['score'],
-            solved=result['solved']
+            solved=result['solved'],
+            session=session,
         )
 
         board = get_leaderboard()
-        display_name = get_display_name(api_key)
+        display_name = get_display_name(api_key, session)
 
         return {
             "submitted": True,

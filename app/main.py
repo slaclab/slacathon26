@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -5,7 +6,8 @@ import logging
 
 from app.settings import settings
 from app.core.task_loader import load_active_task
-from app.routers import jobs, leaderboard
+from app.routers import jobs, leaderboard, registration
+from app.db import create_db_and_tables
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,38 @@ logger.info(f"Loaded task: {getattr(TASK, 'TASK_NAME', 'Unknown')}")
 
 app.include_router(jobs.router)
 app.include_router(leaderboard.router)
+app.include_router(registration.router)
+
+
+@app.on_event("startup")
+async def on_startup():
+    create_db_and_tables()
+    asyncio.create_task(_cleanup_loop())
+
+
+async def _cleanup_loop():
+    import logging
+    from datetime import datetime
+    from sqlmodel import Session, select
+    from app.db import engine
+    from app.models.user import User
+    from app.settings import settings
+    logger = logging.getLogger(__name__)
+    interval = settings.cleanup_interval_minutes * 60
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            with Session(engine) as session:
+                expired = session.exec(
+                    select(User).where(User.verified == False, User.expires_at < datetime.utcnow())
+                ).all()
+                for u in expired:
+                    session.delete(u)
+                session.commit()
+                if expired:
+                    logger.info(f"Cleanup: removed {len(expired)} expired unverified users")
+        except Exception as e:
+            logger.error(f"Cleanup task error: {e}")
 
 
 @app.get("/", response_class=HTMLResponse)

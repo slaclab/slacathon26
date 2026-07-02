@@ -26,7 +26,6 @@ class Settings(BaseSettings):
 
     # File paths
     leaderboard_file: str = Field(default="data/leaderboard.json")
-    user_names_file: str = Field(default="data/user_names.json")
     jobs_file: str = Field(default="data/jobs.json")
 
     # Limits
