@@ -1,7 +1,7 @@
 # Phase 05 — Registration Router
 
 ## Scope
-Create `app/routers/registration.py` with all 4 endpoints.
+Create `app/routers/registration.py` with all 5 endpoints.
 `app/main.py` not yet modified — router exists but is not mounted.
 No existing functionality changed.
 
@@ -11,7 +11,16 @@ Phases 01–04 complete (settings, DB, captcha, email service, templates all exi
 ## Files Created
 | File | Purpose |
 |---|---|
-| `app/routers/registration.py` | `GET /register`, `POST /register`, `GET /verify`, `POST /verify` |
+| `app/routers/registration.py` | `GET /captcha-challenge`, `GET /register`, `POST /register`, `GET /verify`, `POST /verify` |
+
+### Altcha-specific endpoint
+
+`GET /captcha-challenge` — called by `<altcha-widget challengeurl="...">` to fetch a fresh
+proof-of-work challenge. Returns JSON; no auth required.
+
+### Request model field name change
+
+`h_captcha_response` → `altcha_payload` throughout.
 
 ---
 
@@ -32,7 +41,7 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.models.user import User
 from app.settings import settings
-from app.captcha import verify_captcha
+from app.captcha import create_challenge, verify_captcha
 from app.email_service import send_verification_email, send_api_key_email
 
 logger = logging.getLogger(__name__)
@@ -44,25 +53,31 @@ _templates = Jinja2Templates(directory="app/page_templates")
 class RegisterRequest(BaseModel):
     email: EmailStr
     display_name: str
-    h_captcha_response: str
+    altcha_payload: str
 
 
 class VerifyRequest(BaseModel):
     token: str
-    h_captcha_response: str
+    altcha_payload: str
+
+
+@router.get("/captcha-challenge")
+async def captcha_challenge():
+    """Altcha widget fetches a fresh PoW challenge from this endpoint."""
+    return create_challenge()
 
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return _templates.TemplateResponse(
         "register.html.j2",
-        {"request": request, "site_key": settings.hcaptcha_site_key, "root_path": settings.root_path},
+        {"request": request, "root_path": settings.root_path},
     )
 
 
 @router.post("/register", status_code=202)
 async def register(body: RegisterRequest, session: Session = Depends(get_session)):
-    await verify_captcha(body.h_captcha_response)
+    verify_captcha(body.altcha_payload)
 
     existing: Optional[User] = session.exec(select(User).where(User.email == body.email)).first()
 
@@ -100,19 +115,18 @@ async def verify_page(request: Request, token: str = ""):
     if not token:
         return _templates.TemplateResponse(
             "verify.html.j2",
-            {"request": request, "token": "", "site_key": settings.hcaptcha_site_key,
-             "root_path": settings.root_path, "error": "Missing verification token"},
+            {"request": request, "token": "", "root_path": settings.root_path,
+             "error": "Missing verification token"},
         )
     return _templates.TemplateResponse(
         "verify.html.j2",
-        {"request": request, "token": token, "site_key": settings.hcaptcha_site_key,
-         "root_path": settings.root_path, "error": None},
+        {"request": request, "token": token, "root_path": settings.root_path, "error": None},
     )
 
 
 @router.post("/verify")
 async def verify_email(body: VerifyRequest, session: Session = Depends(get_session)):
-    await verify_captcha(body.h_captcha_response)
+    verify_captcha(body.altcha_payload)
 
     user: Optional[User] = session.exec(
         select(User).where(User.verify_token == body.token)
@@ -142,15 +156,16 @@ async def verify_email(body: VerifyRequest, session: Session = Depends(get_sessi
 
 ## Acceptance Criteria
 - `from app.routers.registration import router` imports without error
-- Module-level structure check: 4 routes registered (`/register` GET+POST, `/verify` GET+POST)
+- 5 routes registered: `GET /captcha-challenge`, `GET /register`, `POST /register`, `GET /verify`, `POST /verify`
 - No import of `app.main` or circular deps
+- No `hcaptcha` or `site_key` references
 
 ---
 
 ## Test Suite: `tests/test_phase05_registration_router.py`
 
 ```python
-"""Phase 05 — registration router endpoint tests (no real SMTP, no real captcha)."""
+"""Phase 05 — registration router endpoint tests (Altcha, no real SMTP)."""
 import pytest
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
@@ -187,23 +202,32 @@ def client(app_with_router, mem_engine):
 # Patch captcha to always pass and email to no-op
 @pytest.fixture(autouse=True)
 def patch_externals():
-    with patch("app.routers.registration.verify_captcha", new_callable=AsyncMock) as _cap, \
+    with patch("app.routers.registration.verify_captcha") as _cap, \
          patch("app.routers.registration.send_verification_email", new_callable=AsyncMock) as _vmail, \
          patch("app.routers.registration.send_api_key_email", new_callable=AsyncMock) as _kmail:
         yield _cap, _vmail, _kmail
+
+
+def test_captcha_challenge_endpoint(client):
+    resp = client.get("/captcha-challenge")
+    assert resp.status_code == 200
+    data = resp.json()
+    for key in ("algorithm", "challenge", "salt", "signature"):
+        assert key in data
 
 
 def test_get_register_page(client):
     resp = client.get("/register")
     assert resp.status_code == 200
     assert "SLACATHON" in resp.text
+    assert "altcha-widget" in resp.text
 
 
 def test_post_register_new_user(client):
     resp = client.post("/register", json={
         "email": "newuser@test.com",
         "display_name": "Tester",
-        "h_captcha_response": "tok",
+        "altcha_payload": "fake-but-mocked",
     })
     assert resp.status_code == 202
     assert "email" in resp.json()["detail"].lower()
@@ -211,7 +235,6 @@ def test_post_register_new_user(client):
 
 def test_post_register_duplicate_verified(client, mem_engine):
     from app.models.user import User
-    from sqlmodel import Session
     with Session(mem_engine) as s:
         s.add(User(email="verified@test.com", display_name="V", api_key="vkey1",
                    verified=True, verify_token="used"))
@@ -219,14 +242,14 @@ def test_post_register_duplicate_verified(client, mem_engine):
     resp = client.post("/register", json={
         "email": "verified@test.com",
         "display_name": "V2",
-        "h_captcha_response": "tok",
+        "altcha_payload": "fake",
     })
     assert resp.status_code == 409
 
 
 def test_post_register_replaces_unverified(client, mem_engine):
     from app.models.user import User
-    from sqlmodel import Session, select
+    from sqlmodel import select
     with Session(mem_engine) as s:
         s.add(User(email="unverified@test.com", display_name="U", api_key="ukey1",
                    verified=False, verify_token="old-tok"))
@@ -234,7 +257,7 @@ def test_post_register_replaces_unverified(client, mem_engine):
     resp = client.post("/register", json={
         "email": "unverified@test.com",
         "display_name": "U2",
-        "h_captcha_response": "tok",
+        "altcha_payload": "fake",
     })
     assert resp.status_code == 202
     with Session(mem_engine) as s:
@@ -253,36 +276,36 @@ def test_get_verify_page_with_token(client):
     resp = client.get("/verify?token=sometoken")
     assert resp.status_code == 200
     assert "sometoken" in resp.text
+    assert "altcha-widget" in resp.text
 
 
 def test_post_verify_invalid_token(client):
-    resp = client.post("/verify", json={"token": "badtoken", "h_captcha_response": "tok"})
+    resp = client.post("/verify", json={"token": "badtoken", "altcha_payload": "fake"})
     assert resp.status_code == 404
 
 
 def test_post_verify_expired_token(client, mem_engine):
     from app.models.user import User
-    from sqlmodel import Session
     from datetime import datetime, timedelta
     with Session(mem_engine) as s:
         s.add(User(email="expired@test.com", display_name="E", api_key="ekey1",
                    verified=False, verify_token="expired-tok",
                    expires_at=datetime.utcnow() - timedelta(hours=1)))
         s.commit()
-    resp = client.post("/verify", json={"token": "expired-tok", "h_captcha_response": "tok"})
+    resp = client.post("/verify", json={"token": "expired-tok", "altcha_payload": "fake"})
     assert resp.status_code == 410
 
 
 def test_post_verify_success(client, mem_engine):
     from app.models.user import User
-    from sqlmodel import Session, select
+    from sqlmodel import select
     from datetime import datetime, timedelta
     with Session(mem_engine) as s:
         s.add(User(email="ok@test.com", display_name="OK", api_key="okkey1",
                    verified=False, verify_token="valid-tok",
                    expires_at=datetime.utcnow() + timedelta(hours=24)))
         s.commit()
-    resp = client.post("/verify", json={"token": "valid-tok", "h_captcha_response": "tok"},
+    resp = client.post("/verify", json={"token": "valid-tok", "altcha_payload": "fake"},
                        follow_redirects=False)
     assert resp.status_code == 303
     with Session(mem_engine) as s:

@@ -4,3 +4,9 @@ gunicorn
 pydantic-settings
 numpy
 scipy
+sqlmodel
+aiosmtplib
+jinja2
+email-validator
+altcha
+pytest

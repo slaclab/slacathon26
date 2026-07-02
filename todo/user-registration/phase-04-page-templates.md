@@ -4,6 +4,10 @@
 Create Jinja2 HTML page templates for the register and verify flows.
 Static files only — no Python changes. App still boots identically.
 
+**Captcha widget: Altcha** — self-hosted web component loaded from unpkg CDN
+(or self-hosted from `app/static/` if full air-gap needed).
+No external API calls. No site key. Widget generates and submits the PoW solution.
+
 ## Prereq
 None (pure HTML/Jinja2 files).
 
@@ -17,12 +21,21 @@ None (pure HTML/Jinja2 files).
 > `app/page_templates/` is separate from `app/templates/pages/` (existing Jinja2 dir).
 > Phase 05 wires the router to load from this directory.
 
+### Altcha widget integration
+
+The `<altcha-widget>` element:
+- Loaded from unpkg: `https://unpkg.com/altcha/dist/altcha.min.js` (type=module)
+- `challengeurl` attribute points to `GET /slacathon26/captcha-challenge`
+- On solve, widget sets `name="altcha"` hidden input with base64 payload
+- Submit JS reads `document.querySelector('altcha-widget').value` or the hidden input
+
 ---
 
 ## `app/page_templates/_base_crt.html.j2`
 
 Shared shell. Child templates use `{% extends "_base_crt.html.j2" %}` and fill:
 - `{% block title %}` — page title suffix
+- `{% block head_extra %}` — extra `<head>` tags (widget script)
 - `{% block content %}` — body content inside `.container`
 
 ```html
@@ -87,8 +100,8 @@ Shared shell. Child templates use `{% extends "_base_crt.html.j2" %}` and fill:
     a.back { display: inline-block; margin-bottom: 20px; color: #00aaff; text-decoration: none;
              text-shadow: 0 0 4px #00aaff; font-size: 0.82em; }
     a.back:hover { color: #00ffff; }
-    .h-captcha { margin-bottom: 4px; }
     .instructions { font-size: 0.84em; color: #88bb88; margin-bottom: 22px; line-height: 1.5; }
+    altcha-widget { display: block; margin-bottom: 16px; }
   </style>
 </head>
 <body>
@@ -109,7 +122,7 @@ Shared shell. Child templates use `{% extends "_base_crt.html.j2" %}` and fill:
 {% block title %}REGISTER{% endblock %}
 
 {% block head_extra %}
-<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<script type="module" src="https://unpkg.com/altcha/dist/altcha.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -124,7 +137,7 @@ Shared shell. Child templates use `{% extends "_base_crt.html.j2" %}` and fill:
   <label for="display_name">DISPLAY NAME (shown on leaderboard)</label>
   <input type="text" id="display_name" name="display_name" placeholder="YourHandle" required maxlength="40">
 
-  <div class="h-captcha" data-sitekey="{{ site_key }}"></div>
+  <altcha-widget challengeurl="{{ root_path }}/captcha-challenge" name="altcha"></altcha-widget>
 
   <button type="submit">[ REQUEST API KEY ]</button>
 </form>
@@ -137,8 +150,9 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
   const msg = document.getElementById('msg');
   msg.textContent = '';
 
-  const captchaToken = document.querySelector('[name="h-captcha-response"]')?.value || '';
-  if (!captchaToken) {
+  const widget = document.querySelector('altcha-widget');
+  const altchaPayload = widget ? widget.value : '';
+  if (!altchaPayload) {
     msg.className = 'msg error';
     msg.textContent = 'ERROR: Complete the CAPTCHA first.';
     return;
@@ -147,7 +161,7 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
   const payload = {
     email: document.getElementById('email').value.trim(),
     display_name: document.getElementById('display_name').value.trim(),
-    h_captcha_response: captchaToken,
+    altcha_payload: altchaPayload,
   };
 
   try {
@@ -164,12 +178,12 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
     } else {
       msg.className = 'msg error';
       msg.textContent = 'ERROR: ' + (data.detail || res.status);
-      if (window.hcaptcha) window.hcaptcha.reset();
+      if (widget) widget.reset();
     }
   } catch (err) {
     msg.className = 'msg error';
     msg.textContent = 'NETWORK ERROR — try again.';
-    if (window.hcaptcha) window.hcaptcha.reset();
+    if (widget) widget.reset();
   }
 });
 </script>
@@ -186,7 +200,7 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
 {% block title %}VERIFY EMAIL{% endblock %}
 
 {% block head_extra %}
-<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+<script type="module" src="https://unpkg.com/altcha/dist/altcha.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -203,7 +217,7 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
 
 <form id="verify-form">
   <input type="hidden" name="token" value="{{ token }}">
-  <div class="h-captcha" data-sitekey="{{ site_key }}"></div>
+  <altcha-widget challengeurl="{{ root_path }}/captcha-challenge" name="altcha"></altcha-widget>
   <button type="submit">[ VERIFY MY EMAIL ]</button>
 </form>
 
@@ -217,8 +231,9 @@ if (form) {
     const msg = document.getElementById('msg');
     msg.textContent = '';
 
-    const captchaToken = document.querySelector('[name="h-captcha-response"]')?.value || '';
-    if (!captchaToken) {
+    const widget = document.querySelector('altcha-widget');
+    const altchaPayload = widget ? widget.value : '';
+    if (!altchaPayload) {
       msg.className = 'msg error';
       msg.textContent = 'ERROR: Complete the CAPTCHA first.';
       return;
@@ -226,7 +241,7 @@ if (form) {
 
     const payload = {
       token: document.querySelector('[name="token"]').value,
-      h_captcha_response: captchaToken,
+      altcha_payload: altchaPayload,
     };
 
     try {
@@ -244,12 +259,12 @@ if (form) {
       } else {
         msg.className = 'msg error';
         msg.textContent = 'ERROR: ' + (data.detail || res.status);
-        if (window.hcaptcha) window.hcaptcha.reset();
+        if (widget) widget.reset();
       }
     } catch (err) {
       msg.className = 'msg error';
       msg.textContent = 'NETWORK ERROR — try again.';
-      if (window.hcaptcha) window.hcaptcha.reset();
+      if (widget) widget.reset();
     }
   });
 }
@@ -262,16 +277,17 @@ if (form) {
 
 ## Acceptance Criteria
 - All 3 files parse as valid Jinja2 with no syntax errors
-- `register.html.j2` renders with `site_key` and `root_path` context vars
-- `verify.html.j2` renders with `token`, `site_key`, `root_path`, `error=None`
-- `verify.html.j2` renders with `error="link expired"` — shows error div, hides form
+- `register.html.j2` renders with `root_path` context var — contains `altcha-widget`
+- `verify.html.j2` renders with `token`, `root_path`, `error=None` — contains `altcha-widget`
+- `verify.html.j2` renders with `error="link expired"` — shows error div, no widget/form
+- No `hcaptcha` or `site_key` references remain
 
 ---
 
 ## Test Suite: `tests/test_phase04_templates.py`
 
 ```python
-"""Phase 04 — Jinja2 page template rendering."""
+"""Phase 04 — Jinja2 page template rendering (Altcha widget)."""
 import pytest
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
@@ -284,34 +300,43 @@ def env():
 
 def test_register_renders(env):
     tmpl = env.get_template("register.html.j2")
-    html = tmpl.render(site_key="test-site-key", root_path="/slacathon26")
-    assert "test-site-key" in html
+    html = tmpl.render(root_path="/slacathon26")
     assert "/slacathon26/register" in html
+    assert "altcha-widget" in html
+    assert "/slacathon26/captcha-challenge" in html
     assert "EMAIL ADDRESS" in html
     assert "DISPLAY NAME" in html
+    assert "hcaptcha" not in html.lower()
 
 
 def test_verify_renders_no_error(env):
     tmpl = env.get_template("verify.html.j2")
-    html = tmpl.render(token="tok-abc", site_key="test-site-key", root_path="/slacathon26", error=None)
+    html = tmpl.render(token="tok-abc", root_path="/slacathon26", error=None)
     assert "tok-abc" in html
-    assert "test-site-key" in html
+    assert "altcha-widget" in html
     assert "VERIFY MY EMAIL" in html
     assert "ERROR:" not in html
+    assert "hcaptcha" not in html.lower()
 
 
 def test_verify_renders_with_error(env):
     tmpl = env.get_template("verify.html.j2")
-    html = tmpl.render(token="", site_key="test-site-key", root_path="/slacathon26", error="link expired")
+    html = tmpl.render(token="", root_path="/slacathon26", error="link expired")
     assert "link expired" in html
     assert "verify-form" not in html
 
 
 def test_base_extends_no_error(env):
-    # register and verify both extend _base_crt — rendering them confirms inheritance works
     for name in ("register.html.j2", "verify.html.j2"):
         tmpl = env.get_template(name)
-        html = tmpl.render(site_key="k", root_path="/x", token="t", error=None)
+        html = tmpl.render(root_path="/x", token="t", error=None)
         assert "SLACATHON 2026" in html
-        assert "scan" in html  # animation keyframe from base CSS
+        assert "scan" in html  # keyframe from base CSS
+
+
+def test_no_site_key_context_needed(env):
+    """Altcha needs no site_key — rendering without it must not raise."""
+    tmpl = env.get_template("register.html.j2")
+    html = tmpl.render(root_path="/slacathon26")  # no site_key kwarg
+    assert "altcha-widget" in html
 ```

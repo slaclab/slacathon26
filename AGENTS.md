@@ -93,6 +93,22 @@ The current task is the `flat_beam` task (Round-To-Flat Beam optics): 5 skew qua
 
 `job_manager.charge_validation_quota` is the single gating primitive used by both `/validate` and `/submit`. It checks current count, appends the record durably, then increments the in-memory counter — count only rises after successful disk write.
 
+## Todo / Implementation Plans
+
+Plans live in `todo/`. Each file describes a single implementation phase with code, acceptance criteria, and a test suite.
+
+**After implementing a phase**, mark it done by renaming the file with a `[done]-` prefix:
+
+```
+todo/<task>/work-to-do.md
+→
+todo/<task>/[done]-work-to-do.md
+```
+
+Agents must rename the file as the final step of implementing any phase plan.
+
+---
+
 ## Optimizer Client Examples
 
 In `examples/`:

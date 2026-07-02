@@ -169,3 +169,6 @@ logs/
 # Temporary
 *.tmp
 *.bak
+
+#. local files
+.claude

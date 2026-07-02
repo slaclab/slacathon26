@@ -7,7 +7,7 @@ No behavior changes. No DB. No routes. Zero breakage risk.
 ## Files Changed
 | File | Change |
 |---|---|
-| `app/settings.py` | Add 8 new optional fields |
+| `app/settings.py` | Add 7 new optional fields |
 | `requirements.txt` | Add 5 new packages |
 
 ## Settings additions (`app/settings.py`)
@@ -27,13 +27,12 @@ public_url: str = Field(default="http://localhost:8000")
 verify_timeout_hours: int = Field(default=24)
 cleanup_interval_minutes: int = Field(default=10)
 
-# hCaptcha
-hcaptcha_site_key: str = Field(default="10000000-ffff-ffff-ffff-000000000001")
-hcaptcha_secret_key: str = Field(default="0x0000000000000000000000000000000000000000")
-hcaptcha_verify_url: str = Field(default="https://api.hcaptcha.com/siteverify")
+# Altcha (self-hosted proof-of-work CAPTCHA — no external service)
+altcha_hmac_key: str = Field(default="dev-hmac-key-change-in-prod")
 ```
 
-Dev defaults use hCaptcha test keys that always pass (no widget shown).
+`altcha_hmac_key` is the server-side secret used to sign and verify Altcha challenges.
+**Change in production** — any non-empty string works, longer = more secure.
 
 ## requirements.txt additions
 
@@ -42,14 +41,15 @@ sqlmodel
 aiosmtplib
 jinja2
 email-validator
-httpx
+altcha
 ```
 
 Note: `jinja2` may already be pulled by FastAPI; explicit pin is fine.
+`httpx` is NOT needed — Altcha verification is fully local (no external HTTP calls).
 
 ## Acceptance Criteria
 - `python -c "from app.settings import settings; print(settings.smtp_host)"` prints `localhost`
-- All 9 new fields accessible without error
+- All 7 new fields accessible without error
 - `pip install -r requirements.txt` succeeds
 
 ---
@@ -77,11 +77,8 @@ def test_registration_defaults():
     assert settings.cleanup_interval_minutes > 0
 
 
-def test_hcaptcha_defaults():
-    # dev test key — always-pass value from hCaptcha docs
-    assert settings.hcaptcha_site_key == "10000000-ffff-ffff-ffff-000000000001"
-    assert settings.hcaptcha_secret_key.startswith("0x")
-    assert "hcaptcha.com" in settings.hcaptcha_verify_url
+def test_altcha_defaults():
+    assert settings.altcha_hmac_key != ""
 
 
 def test_existing_settings_unchanged():

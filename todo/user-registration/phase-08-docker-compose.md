@@ -84,9 +84,8 @@ SLACATHON_SMTP_FROM=noreply@slacathon26.local
 # Public URL (base for verification links)
 SLACATHON_PUBLIC_URL=http://localhost:8000
 
-# hCaptcha (dev test keys below — replace in prod)
-SLACATHON_HCAPTCHA_SITE_KEY=10000000-ffff-ffff-ffff-000000000001
-SLACATHON_HCAPTCHA_SECRET_KEY=0x0000000000000000000000000000000000000000
+# Altcha (self-hosted PoW CAPTCHA — no external service, change key in prod)
+SLACATHON_ALTCHA_HMAC_KEY=dev-hmac-key-change-in-prod
 
 # Registration
 SLACATHON_VERIFY_TIMEOUT_HOURS=24
@@ -166,6 +165,6 @@ def test_env_example_has_new_vars():
     assert path.exists()
     content = path.read_text()
     for var in ["SLACATHON_SMTP_HOST", "SLACATHON_PUBLIC_URL",
-                "SLACATHON_HCAPTCHA_SITE_KEY", "SLACATHON_VERIFY_TIMEOUT_HOURS"]:
+                "SLACATHON_ALTCHA_HMAC_KEY", "SLACATHON_VERIFY_TIMEOUT_HOURS"]:
         assert var in content, f"{var} missing from .env.example"
 ```

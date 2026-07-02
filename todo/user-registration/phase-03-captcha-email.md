@@ -4,13 +4,17 @@
 Create `app/captcha.py` and `app/email_service.py` plus Jinja2 email templates.
 No routes. No DB writes. No existing code modified.
 
+**Captcha: Altcha** — self-hosted proof-of-work. No external server. No API keys beyond
+the `altcha_hmac_key` in settings. Client solves a SHA-256 challenge in-browser; server
+verifies the solution locally using the `altcha` Python package.
+
 ## Prereq
 Phase 01 (settings fields exist), Phase 02 (User model — email service imports it for type hints).
 
 ## Files Created
 | File | Purpose |
 |---|---|
-| `app/captcha.py` | `verify_captcha(token)` async helper |
+| `app/captcha.py` | `create_challenge()` + `verify_captcha(payload)` using Altcha |
 | `app/email_service.py` | `send_verification_email()`, `send_api_key_email()` |
 | `app/email_templates/verify_email.html.j2` | Verification email body |
 | `app/email_templates/api_key_delivery.html.j2` | API key delivery email body |
@@ -19,22 +23,50 @@ Phase 01 (settings fields exist), Phase 02 (User model — email service imports
 
 ## `app/captcha.py`
 
+Altcha flow:
+1. `GET /captcha-challenge` → server calls `create_challenge()` → returns JSON challenge
+2. Browser widget solves it (SHA-256 proof-of-work, runs in JS)
+3. Widget encodes solution as base64 JSON → `altcha_payload` field in form submission
+4. Server calls `verify_captcha(altcha_payload)` → validates locally, no HTTP
+
 ```python
-import httpx
+import base64
+import json
+import logging
 from fastapi import HTTPException
+from altcha import create_challenge as _create, verify_solution, ChallengeOptions
 from app.settings import settings
 
+logger = logging.getLogger(__name__)
 
-async def verify_captcha(token: str):
-    if not token:
-        raise HTTPException(status_code=400, detail="CAPTCHA token missing")
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            settings.hcaptcha_verify_url,
-            data={"secret": settings.hcaptcha_secret_key, "response": token},
-        )
-    result = resp.json()
-    if not result.get("success"):
+
+def create_challenge() -> dict:
+    """Generate a new Altcha proof-of-work challenge. Call from GET /captcha-challenge."""
+    challenge = _create(ChallengeOptions(hmac_key=settings.altcha_hmac_key))
+    return {
+        "algorithm": challenge.algorithm,
+        "challenge": challenge.challenge,
+        "salt": challenge.salt,
+        "signature": challenge.signature,
+    }
+
+
+def verify_captcha(payload: str):
+    """
+    Verify Altcha widget payload (base64-encoded JSON solution from browser).
+    Raises HTTPException(400) on missing or invalid payload.
+    """
+    if not payload:
+        raise HTTPException(status_code=400, detail="CAPTCHA solution missing")
+    try:
+        decoded = base64.b64decode(payload).decode()
+        solution = json.loads(decoded)
+    except Exception:
+        raise HTTPException(status_code=400, detail="CAPTCHA payload malformed")
+
+    ok = verify_solution(solution, settings.altcha_hmac_key)
+    if not ok:
+        logger.warning("Altcha verification failed")
         raise HTTPException(status_code=400, detail="CAPTCHA verification failed")
 ```
 
@@ -137,50 +169,78 @@ Do not share this key. If lost, re-register with the same email.
 ---
 
 ## Acceptance Criteria
-- `from app.captcha import verify_captcha` imports without error
+- `from app.captcha import create_challenge, verify_captcha` imports without error
+- `create_challenge()` returns dict with keys: `algorithm`, `challenge`, `salt`, `signature`
+- `verify_captcha("")` raises `HTTPException(400)`
+- `verify_captcha("not-base64!!")` raises `HTTPException(400)`
 - `from app.email_service import send_verification_email` imports without error
 - Both email templates render with Jinja2 without error
-- `verify_captcha("")` raises `HTTPException(400)`
 
 ---
 
 ## Test Suite: `tests/test_phase03_captcha_email.py`
 
 ```python
-"""Phase 03 — captcha helper and email service unit tests."""
+"""Phase 03 — Altcha captcha helper and email service unit tests."""
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+import base64
+import json
+from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 
 
 # --- captcha ---
 
-@pytest.mark.asyncio
-async def test_verify_captcha_empty_token():
+def test_create_challenge_returns_required_fields():
+    from app.captcha import create_challenge
+    ch = create_challenge()
+    for key in ("algorithm", "challenge", "salt", "signature"):
+        assert key in ch, f"Missing field: {key}"
+
+
+def test_verify_captcha_empty_raises():
     from app.captcha import verify_captcha
     with pytest.raises(HTTPException) as exc:
-        await verify_captcha("")
+        verify_captcha("")
     assert exc.value.status_code == 400
 
 
-@pytest.mark.asyncio
-async def test_verify_captcha_success():
+def test_verify_captcha_malformed_raises():
     from app.captcha import verify_captcha
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"success": True}
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
-        await verify_captcha("valid-token")  # no exception
+    with pytest.raises(HTTPException) as exc:
+        verify_captcha("not-valid-base64!!!")
+    assert exc.value.status_code == 400
 
 
-@pytest.mark.asyncio
-async def test_verify_captcha_failure():
+def test_verify_captcha_wrong_solution_raises():
     from app.captcha import verify_captcha
-    mock_resp = MagicMock()
-    mock_resp.json.return_value = {"success": False}
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
-        with pytest.raises(HTTPException) as exc:
-            await verify_captcha("bad-token")
-        assert exc.value.status_code == 400
+    # Valid base64 JSON but wrong solution
+    fake = base64.b64encode(json.dumps({"algorithm": "SHA-256", "challenge": "x",
+                                        "number": 0, "salt": "s", "signature": "bad"}).encode()).decode()
+    with pytest.raises(HTTPException) as exc:
+        verify_captcha(fake)
+    assert exc.value.status_code == 400
+
+
+def test_verify_captcha_valid_roundtrip():
+    """Create a challenge then produce a valid solution and verify it passes."""
+    from app.captcha import create_challenge, verify_captcha
+    from altcha import solve_challenge
+
+    ch = create_challenge()
+    # altcha.solve_challenge brute-forces the PoW — fast at default complexity
+    solution = solve_challenge(ch["challenge"], ch["salt"], ch["algorithm"], max_number=1_000_000)
+    assert solution is not None, "solve_challenge returned None — challenge unsolvable at max_number"
+
+    payload = base64.b64encode(json.dumps({
+        "algorithm": ch["algorithm"],
+        "challenge": ch["challenge"],
+        "number": solution.number,
+        "salt": ch["salt"],
+        "signature": ch["signature"],
+    }).encode()).decode()
+
+    verify_captcha(payload)  # must not raise
 
 
 # --- email service ---
@@ -191,7 +251,7 @@ async def test_send_verification_email():
     with patch("aiosmtplib.send", new_callable=AsyncMock) as mock_send:
         await send_verification_email("u@test.com", "http://verify.link/tok", 24)
         mock_send.assert_called_once()
-        args, kwargs = mock_send.call_args
+        args, _ = mock_send.call_args
         msg = args[0]
         assert "u@test.com" in msg["To"]
 
@@ -202,7 +262,6 @@ async def test_send_api_key_email():
     with patch("aiosmtplib.send", new_callable=AsyncMock) as mock_send:
         await send_api_key_email("u@test.com", "my-api-key-xyz")
         mock_send.assert_called_once()
-        # verify key appears in rendered body
         args, _ = mock_send.call_args
         msg = args[0]
         payload = msg.get_payload()
