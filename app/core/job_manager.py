@@ -7,7 +7,7 @@ import logging
 import math
 import numpy as np
 
-from settings import settings
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +19,6 @@ jobs: dict = {}
 jobs_lock = threading.RLock()
 append_lock = threading.Lock()
 
-# Live per-user validation counts (populated after rebuilder definition below).
-# Quota ownership consolidated in job_manager.
 user_validation_counts: dict = {}
 
 
@@ -170,7 +168,6 @@ def get_user_validation_counts() -> dict:
                     uid = job.get("user_id")
                     jid = job.get("job_id")
                     if uid and jid:
-                        # count unique jobs per user (file has process+complete lines)
                         if (uid, jid) not in seen:
                             seen[(uid, jid)] = True
                             counts[uid] = counts.get(uid, 0) + 1
@@ -189,7 +186,7 @@ def set_max_validations_per_user(limit: int):
 
 
 def get_quota_info(user_id: str) -> dict:
-    """Return quota status for API responses. Single source of truth (eliminates duplication in main.py)."""
+    """Return quota status for API responses."""
     limit = MAX_VALIDATIONS_PER_USER
     used = user_validation_counts.get(user_id, 0)
     return {
@@ -199,6 +196,4 @@ def get_quota_info(user_id: str) -> dict:
     }
 
 
-# Populate live counts from job history now that the rebuilder function is defined.
-# This replaces the previous assignment that lived in middleware.py.
 user_validation_counts = get_user_validation_counts()

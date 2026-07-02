@@ -8,10 +8,8 @@ import os
 import threading
 import numpy as np
 
-from settings import settings
-
-from task_loader import load_active_task
-# Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
+from app.settings import settings
+from app.core.task_loader import load_active_task
 
 
 logging.basicConfig(
@@ -80,7 +78,7 @@ class LeaderboardEntry:
         self.score = score
         self.solved = solved
         self.timestamp = timestamp
-    
+
     def to_dict(self):
         return {
             "user": get_display_name(self.user_id),
@@ -89,7 +87,7 @@ class LeaderboardEntry:
             "solved": self.solved,
             "timestamp": self.timestamp
         }
-    
+
     def to_storage_dict(self):
         return {
             "user_id": self.user_id,
@@ -98,7 +96,7 @@ class LeaderboardEntry:
             "solved": self.solved,
             "timestamp": self.timestamp
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict):
         inp = data.get("input", {})
@@ -143,15 +141,15 @@ class UserSubmissionTracker:
         self.max_queries = max_queries
         self.submissions: Dict[str, deque] = {}
         logger.info(f"UserSubmissionTracker initialized with max {max_queries} entries per user")
-    
+
     def add_submission(self, user_id: str, input_data: dict):
         if user_id not in self.submissions:
             self.submissions[user_id] = deque(maxlen=self.max_queries)
         self.submissions[user_id].append(input_data)
-    
+
     def get_recent_submissions(self, user_id: str) -> List[dict]:
         return list(self.submissions.get(user_id, []))
-    
+
     def get_submission_count(self, user_id: str) -> int:
         return len(self.submissions.get(user_id, []))
 
@@ -168,8 +166,7 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
 
     entry = LeaderboardEntry(user_id, input, score, solved, time.time())
     leaderboard.append(entry)
-    
-    # Sort respecting task direction (lower better if minimize)
+
     try:
         task = load_active_task()
         minimize = getattr(task, "MINIMIZE", True)
@@ -177,12 +174,11 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
         minimize = True
     leaderboard.sort(key=lambda x: x.score, reverse=not minimize)
     leaderboard = leaderboard[:LEADERBOARD_SIZE]
-    
+
     display_name = get_display_name(user_id)
     logger.info(f"Leaderboard updated. User: {display_name}, Score: {score:.6f}, Total entries: {len(leaderboard)}")
     save_leaderboard()
 
-    # Return the final rank of *this* entry (1-based), or None if it didn't make the top N
     for i, e in enumerate(leaderboard, 1):
         if e is entry:
             return i

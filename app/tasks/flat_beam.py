@@ -3,7 +3,7 @@ import os
 import time
 from pydantic import BaseModel
 
-from tasks.base import TaskInput, TaskResult
+from app.tasks.base import TaskInput, TaskResult
 
 
 class Input(TaskInput):

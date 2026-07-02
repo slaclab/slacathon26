@@ -25,9 +25,9 @@ class Settings(BaseSettings):
     log_level: str = Field(default="info")
 
     # File paths
-    leaderboard_file: str = Field(default="leaderboard.json")
-    user_names_file: str = Field(default="user_names.json")
-    jobs_file: str = Field(default="jobs.json")
+    leaderboard_file: str = Field(default="data/leaderboard.json")
+    user_names_file: str = Field(default="data/user_names.json")
+    jobs_file: str = Field(default="data/jobs.json")
 
     # Limits
     max_queries_per_user: int = Field(default=10)

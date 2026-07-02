@@ -158,6 +158,9 @@ Thumbs.db
 jobs.json
 leaderboard.json
 user_names.json
+data/*.json
+data/*.db
+data/*.ndjson
 
 # Log files
 *.log

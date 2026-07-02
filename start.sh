@@ -37,5 +37,5 @@ exec gunicorn \
     --access-logfile gunicorn-access.log \
     --error-logfile gunicorn-error.log \
     --log-level info \
-    main:app
+    app.main:app
 

@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run: uvicorn dev server",
+      "type": "shell",
+      "command": "uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+      "options": {
+        "env": {
+          "SLACATHON_API_KEYS": "dev-key-1,dev-key-2",
+          "SLACATHON_ACTIVE_TASK": "flat_beam",
+          "SLACATHON_ROOT_PATH": "",
+          "SLACATHON_PORT": "8000"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}
