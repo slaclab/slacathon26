@@ -139,7 +139,7 @@ async def submit_result(
         result = TASK.validate(validated_input).model_dump()
         logger.info(f"Evaluation result: {result}")
         
-        add_to_leaderboard(
+        rank = add_to_leaderboard(
             user_id=api_key,
             input=input_data,
             score=result['score'],
@@ -148,7 +148,6 @@ async def submit_result(
         
         board = get_leaderboard()
         display_name = get_display_name(api_key)
-        user_rank = next((i for i, entry in enumerate(board, 1) if entry['user'] == display_name), None)
         
         return {
             "submitted": True,
@@ -156,7 +155,7 @@ async def submit_result(
             "score": result['score'],
             "solved": result['solved'],
             "message": result['message'],
-            "rank": user_rank,
+            "rank": rank,
             "leaderboard_size": len(board)
         }
         

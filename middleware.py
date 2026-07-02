@@ -164,7 +164,7 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     for existing in leaderboard:
         if existing.input == input:
             logger.info(f"Duplicate solution submitted by {get_display_name(user_id)}, ignoring.")
-            return
+            return None
 
     entry = LeaderboardEntry(user_id, input, score, solved, time.time())
     leaderboard.append(entry)
@@ -181,6 +181,12 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     display_name = get_display_name(user_id)
     logger.info(f"Leaderboard updated. User: {display_name}, Score: {score:.6f}, Total entries: {len(leaderboard)}")
     save_leaderboard()
+
+    # Return the final rank of *this* entry (1-based), or None if it didn't make the top N
+    for i, e in enumerate(leaderboard, 1):
+        if e is entry:
+            return i
+    return None
 
 def get_leaderboard() -> List[dict]:
     return [entry.to_dict() for entry in leaderboard]
