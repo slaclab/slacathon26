@@ -12,3 +12,4 @@ altcha
 pytest
 pytest-asyncio
 anyio[trio]
+httpx2

@@ -1,0 +1,76 @@
+{% extends "_base_crt.html.j2" %}
+
+{% block title %}VERIFY EMAIL{% endblock %}
+
+{% block head_extra %}
+<script type="module" src="https://unpkg.com/altcha/dist/altcha.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="title">SLACATHON 2026</div>
+<div class="subtitle">Email Verification</div>
+
+{% if error %}
+<div class="msg error">ERROR: {{ error }}</div>
+{% else %}
+<p class="instructions">
+  Solve the challenge below to confirm your email address.<br>
+  Your API key will be sent immediately after.
+</p>
+
+<form id="verify-form">
+  <input type="hidden" name="token" value="{{ token }}">
+  <altcha-widget challengeurl="{{ root_path }}/captcha-challenge" name="altcha"></altcha-widget>
+  <button type="submit">[ VERIFY MY EMAIL ]</button>
+</form>
+
+<div id="msg" class="msg"></div>
+
+<script>
+const form = document.getElementById('verify-form');
+if (form) {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('msg');
+    msg.textContent = '';
+
+    const widget = document.querySelector('altcha-widget');
+    const altchaPayload = widget ? widget.value : '';
+    if (!altchaPayload) {
+      msg.className = 'msg error';
+      msg.textContent = 'ERROR: Complete the CAPTCHA first.';
+      return;
+    }
+
+    const payload = {
+      token: document.querySelector('[name="token"]').value,
+      altcha_payload: altchaPayload,
+    };
+
+    try {
+      const res = await fetch('{{ root_path }}/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.redirected) { window.location.href = res.url; return; }
+      const data = await res.json();
+      if (res.ok) {
+        msg.className = 'msg ok';
+        msg.textContent = '> Email verified! API key sent to your inbox.';
+        form.style.display = 'none';
+      } else {
+        msg.className = 'msg error';
+        msg.textContent = 'ERROR: ' + (data.detail || res.status);
+        if (widget) widget.reset();
+      }
+    } catch (err) {
+      msg.className = 'msg error';
+      msg.textContent = 'NETWORK ERROR — try again.';
+      if (widget) widget.reset();
+    }
+  });
+}
+</script>
+{% endif %}
+{% endblock %}

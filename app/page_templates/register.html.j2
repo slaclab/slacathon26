@@ -1,0 +1,71 @@
+{% extends "_base_crt.html.j2" %}
+
+{% block title %}REGISTER{% endblock %}
+
+{% block head_extra %}
+<script type="module" src="https://unpkg.com/altcha/dist/altcha.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<a href="{{ root_path }}/" class="back">← Return to Landing</a>
+<div class="title">SLACATHON 2026</div>
+<div class="subtitle">Create Account — get your API key</div>
+
+<form id="reg-form">
+  <label for="email">EMAIL ADDRESS</label>
+  <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+
+  <label for="display_name">DISPLAY NAME (shown on leaderboard)</label>
+  <input type="text" id="display_name" name="display_name" placeholder="YourHandle" required maxlength="40">
+
+  <altcha-widget challengeurl="{{ root_path }}/captcha-challenge" name="altcha"></altcha-widget>
+
+  <button type="submit">[ REQUEST API KEY ]</button>
+</form>
+
+<div id="msg" class="msg"></div>
+
+<script>
+document.getElementById('reg-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+
+  const widget = document.querySelector('altcha-widget');
+  const altchaPayload = widget ? widget.value : '';
+  if (!altchaPayload) {
+    msg.className = 'msg error';
+    msg.textContent = 'ERROR: Complete the CAPTCHA first.';
+    return;
+  }
+
+  const payload = {
+    email: document.getElementById('email').value.trim(),
+    display_name: document.getElementById('display_name').value.trim(),
+    altcha_payload: altchaPayload,
+  };
+
+  try {
+    const res = await fetch('{{ root_path }}/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      msg.className = 'msg ok';
+      msg.textContent = '> Check your email — verification link sent.';
+      document.getElementById('reg-form').style.display = 'none';
+    } else {
+      msg.className = 'msg error';
+      msg.textContent = 'ERROR: ' + (data.detail || res.status);
+      if (widget) widget.reset();
+    }
+  } catch (err) {
+    msg.className = 'msg error';
+    msg.textContent = 'NETWORK ERROR — try again.';
+    if (widget) widget.reset();
+  }
+});
+</script>
+{% endblock %}
