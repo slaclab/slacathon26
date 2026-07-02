@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+gunicorn
+pydantic-settings
+numpy
+scipy

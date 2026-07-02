@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FastAPI (uvicorn)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"],
+      "env": {
+        "SLACATHON_API_KEYS": "dev-key-1,dev-key-2",
+        "SLACATHON_ACTIVE_TASK": "flat_beam",
+        "SLACATHON_ROOT_PATH": "",
+        "SLACATHON_PORT": "8000"
+      },
+      "jinja": true,
+      "justMyCode": false
+    }
+  ]
+}

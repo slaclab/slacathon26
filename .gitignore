@@ -138,7 +138,6 @@ dmypy.json
 cython_debug/
 
 # IDEs and editors
-.vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace

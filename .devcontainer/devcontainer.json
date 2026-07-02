@@ -1,0 +1,34 @@
+{
+  "name": "slacathon26",
+  "build": {
+    "dockerfile": "../Dockerfile"
+  },
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "pip install --no-cache-dir -r requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylance",
+        "ms-python.debugpy"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.terminal.activateEnvironment": false
+      }
+    }
+  },
+  "remoteEnv": {
+    "SLACATHON_API_KEYS": "dev-key-1,dev-key-2",
+    "SLACATHON_ACTIVE_TASK": "flat_beam",
+    "SLACATHON_ROOT_PATH": "",
+    "SLACATHON_HOST": "0.0.0.0",
+    "SLACATHON_PORT": "8000"
+  }
+}
