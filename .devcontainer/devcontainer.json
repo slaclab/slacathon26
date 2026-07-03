@@ -3,10 +3,10 @@
   "dockerComposeFile": "../docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspaces/slacathon26",
-  "forwardPorts": [8000, 8025],
+  "forwardPorts": [8000, "mailpit:8025"],
   "portsAttributes": {
     "8000": { "label": "FastAPI" },
-    "8025": { "label": "Mailpit UI" }
+    "mailpit:8025": { "label": "Mailpit UI" }
   },
   "postCreateCommand": "pip install -r requirements.txt",
   "customizations": {

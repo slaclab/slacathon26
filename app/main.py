@@ -2,6 +2,7 @@ import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import logging
 
 from app.settings import settings
@@ -12,6 +13,7 @@ from app.db import create_db_and_tables
 logger = logging.getLogger(__name__)
 
 app = FastAPI(root_path=settings.root_path)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -58,19 +60,19 @@ async def _cleanup_loop():
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     logger.info("Root endpoint accessed")
-    return templates.TemplateResponse("pages/index.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/index.html")
 
 
 @app.get("/board", response_class=HTMLResponse)
 async def leaderboard_page(request: Request):
     logger.info("Leaderboard page accessed")
-    return templates.TemplateResponse("pages/leaderboard.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/leaderboard.html")
 
 
 @app.get("/team", response_class=HTMLResponse)
 async def team_page(request: Request):
     logger.info("Team page accessed")
-    return templates.TemplateResponse("pages/team.html", {"request": request})
+    return templates.TemplateResponse(request, "pages/team.html")
 
 
 @app.get("/health")

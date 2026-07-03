@@ -4,7 +4,7 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = "sqlite:///./data/users.db"
+DATABASE_URL = "sqlite:///./data/slacathon26.db"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 

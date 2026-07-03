@@ -3,7 +3,7 @@
 {% block title %}REGISTER{% endblock %}
 
 {% block head_extra %}
-<script type="module" src="https://unpkg.com/altcha/dist/altcha.min.js"></script>
+<script type="module" src="{{ root_path }}/static/altcha.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -32,7 +32,7 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
   msg.textContent = '';
 
   const widget = document.querySelector('altcha-widget');
-  const altchaPayload = widget ? widget.value : '';
+  const altchaPayload = new FormData(document.getElementById('reg-form')).get('altcha') || '';
   if (!altchaPayload) {
     msg.className = 'msg error';
     msg.textContent = 'ERROR: Complete the CAPTCHA first.';
