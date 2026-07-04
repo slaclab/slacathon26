@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slacathon"
+version = "0.1.0"
+description = "SLACATHON'26 DEMO - AI optimization platform for accelerators"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "numpy>=1.24",
+    "python-dotenv>=1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"slacathon.tasks.data" = ["fort.1"]
+
+[tool.setuptools]
+include-package-data = true

@@ -1,5 +1,5 @@
 import numpy as np
-from XoptOptimizer import XoptOptimizer
+from xopt_optimizer import XoptOptimizer
 
 from xopt import Xopt, Evaluator, VOCS
 from xopt.generators.bayesian import UpperConfidenceBoundGenerator

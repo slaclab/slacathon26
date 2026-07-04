@@ -8,9 +8,9 @@ import os
 import threading
 import numpy as np
 
-from settings import settings
+from .settings import settings
 
-from task_loader import load_active_task
+from .task_loader import load_active_task
 # Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
 
 

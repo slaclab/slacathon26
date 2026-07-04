@@ -7,7 +7,7 @@ import logging
 import math
 import numpy as np
 
-from settings import settings
+from .settings import settings
 
 logger = logging.getLogger(__name__)
 

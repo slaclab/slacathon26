@@ -8,12 +8,16 @@
 # Or create a .env file (see .env.example) and it will be sourced automatically.
 #
 # To switch task logic:
-#   export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see tasks/ dir)
+#   export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see src/slacathon/tasks/ dir)
 #
 
 set -e
 
-# Optionally load variables from .env in the same directory (if present)
+# Determine root from script location (supports invocation from anywhere)
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+# Load .env from root (after cd so relative .env works)
 if [ -f .env ]; then
     # shellcheck disable=SC1091
     set -a
@@ -23,10 +27,11 @@ if [ -f .env ]; then
 fi
 
 # Switch tasks: export SLACATHON_ACTIVE_TASK=flat_beam  (or fel/mars)
-# See tasks/ and GET /task for schema.
+# See src/slacathon/tasks/ and GET /task for schema.
 
-# Activate virtualenv and start the server
-source /home/alex/backend/venv/bin/activate
+# Activate virtualenv and start the server (relocatable)
+source "$ROOT/venv/bin/activate"
+export PYTHONPATH="$ROOT/src"
 
 # Gunicorn with explicit logging so we can debug 500s / worker crashes
 exec gunicorn \
@@ -37,5 +42,5 @@ exec gunicorn \
     --access-logfile gunicorn-access.log \
     --error-logfile gunicorn-error.log \
     --log-level info \
-    main:app
+    slacathon.main:app
 

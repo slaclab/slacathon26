@@ -13,11 +13,11 @@ Each task defines:
 - Dynamic validation using per-task Pydantic models
 - Example: Beamline Guru (default)
 
-See the live site and optimizer clients (GPOptimizer.py, XoptOptimizer.py) for usage examples.
+See the live site and optimizer clients (in clients/) for usage examples.
 
 **Optimizer examples dependencies:**
-- `GPOptimizer.py`: `pip install numpy scipy scikit-learn`
-- `XoptOptimizer.py`: `pip install xopt numpy requests` (Xopt provides modern Bayesian optimization)
+- `clients/gp_optimizer.py`: `pip install numpy scipy scikit-learn`
+- `clients/xopt_optimizer.py`: `pip install xopt numpy requests` (Xopt provides modern Bayesian optimization)
 
 ## Authors
 
@@ -53,43 +53,70 @@ All settings use the `SLACATHON_` prefix (see `.env.example` for full list: keys
 
 ### 4. Run
 ```bash
-./start.sh
+./scripts/start.sh
 ```
 
 Or for development:
 ```bash
 source venv/bin/activate
-uvicorn main:app --reload
+PYTHONPATH=src uvicorn slacathon.main:app --reload
 ```
 
-**Note:** `start.sh` hard-codes the venv path for the current deployment. Edit it or use your own activation for other environments. Use `SLACATHON_ACTIVE_TASK` (or set it in `.env`) to switch challenge logic (see `tasks/`). All configuration uses the `SLACATHON_` prefix.
+**Note:** `scripts/start.sh` is relocatable (derives ROOT, sets PYTHONPATH, cds to root, sources .env from root). Use `SLACATHON_ACTIVE_TASK` (or set it in `.env`) to switch challenge logic (see `src/slacathon/tasks/`). All configuration uses the `SLACATHON_` prefix.
 
 ## Project Structure
 
 ```
-backend/
-├── main.py                 # FastAPI app (root_path=/slacathon26)
-├── settings.py             # Centralized config via SLACATHON_* env vars + .env (pydantic-settings)
-├── job_manager.py          # Job persistence (ndjson), quotas, validation counts, make_json_safe
-├── middleware.py           # API key auth, per-user history tracker, leaderboard logic
-├── task_loader.py          # Loads active task from tasks/ dir (enforces Task protocol)
-├── tasks/
-│   ├── base.py             # TaskInput, TaskResult, Task protocol (TARGET, MINIMIZE, FAILURE_SCORE, ...)
-│   ├── flat_beam.py        # Default task (RTFB round-to-flat beam optimization)
-│   ├── fort.1              # Physics data file (for flat beam task)
-│   └── __init__.py
-├── GPOptimizer.py          # Gaussian Process optimizer client example (sklearn)
-├── XoptOptimizer.py        # Xopt-based Bayesian optimizer client example
-├── optimize_usage.py       # GP optimization script example (with input patching)
-├── optimize_xopt_usage.py  # Xopt optimization script example (with input patching)
-├── usage.py                # Simple validation client example
-├── start.sh                # Launcher (activates venv + gunicorn, respects SLACATHON_*)
+slacathon26/
+├── README.md
+├── pyproject.toml
 ├── .env.example
-├── index.html              # Landing / hero page
-├── leaderboard.html        # Leaderboard UI (dynamic labels + target via /task)
-├── team.html
 ├── .gitignore
-└── README.md
+│
+├── src/
+│   └── slacathon/
+│       ├── __init__.py
+│       ├── main.py
+│       ├── settings.py
+│       ├── middleware.py
+│       ├── job_manager.py
+│       ├── task_loader.py
+│       └── tasks/
+│           ├── __init__.py
+│           ├── base.py
+│           ├── flat_beam.py
+│           └── data/
+│               └── fort.1
+│
+├── clients/
+│   ├── README.md
+│   ├── gp_optimizer.py
+│   ├── xopt_optimizer.py
+│   ├── optimize_usage.py
+│   ├── optimize_xopt_usage.py
+│   └── usage.py
+│
+├── notebooks/
+│   ├── GP-optimizer.ipynb
+│   └── Xopt-optimizer.ipynb
+│
+├── web/
+│   ├── index.html
+│   ├── leaderboard.html
+│   └── team.html
+│
+├── scripts/
+│   └── start.sh
+│
+├── data/
+│   ├── leaderboard.json
+│   ├── jobs.json
+│   └── user_names.json
+│
+└── tests/
+    ├── test_quota.py
+    ├── test_leaderboard.py
+    └── test_flat_beam.py
 ```
 
 **Key changes to project structure:**
@@ -98,15 +125,17 @@ backend/
 - `task_loader.py` + `tasks/` package for pluggable challenges (tasks declare TARGET, MINIMIZE, MAX_VALIDATIONS_PER_USER, etc.)
 - `job_manager.py` extracted (jobs + quota logic moved out of middleware)
 - Score is the raw optimization value from the task; TARGET + MINIMIZE only determine "solved"
-- All static HTML served from root
-- No top-level `app/` directory (flat `backend/` layout)
+- Client examples moved to `clients/` (separate from server)
+- Runtime data to `data/` (gitignored)
+- `fort.1` moved to data subdir under tasks, loaded via importlib.resources
+- Structure now uses src/ layout for the slacathon package
 
 ## Development
 
 ```bash
-# Recommended: use the provided start.sh (or manually)
+# Recommended: use the provided scripts/start.sh (or manually)
 source venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+PYTHONPATH=src uvicorn slacathon.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Configuration is read from `.env` or environment variables with the `SLACATHON_` prefix.
@@ -122,20 +151,21 @@ curl http://localhost:8888/task
 Use the included launcher (recommended):
 
 ```bash
-./start.sh
+./scripts/start.sh
 ```
 
 It activates the venv and runs:
 ```bash
 gunicorn -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 \
-  --bind 127.0.0.1:8888 main:app
+  --bind 127.0.0.1:8888 slacathon.main:app
 ```
+(or simply `./scripts/start.sh`)
 
 To switch tasks (pluggable system):
 
 ```bash
-export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see tasks/ dir)
-./start.sh
+export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see src/slacathon/tasks/ dir)
+./scripts/start.sh
 ```
 
 Or set it in `.env`:
@@ -164,11 +194,12 @@ Use `X-API-Key` header for protected endpoints. Quota limits (`MAX_VALIDATIONS_P
 
 - 🚀 FastAPI + Gunicorn
 - 🔐 API key authentication + per-user quotas
-- 🔌 Pluggable tasks (`tasks/*.py` + `SLACATHON_ACTIVE_TASK`)
+- 🔌 Pluggable tasks (`src/slacathon/tasks/*.py` + `SLACATHON_ACTIVE_TASK`)
 - 📊 Dynamic input schema (`GET /task`)
 - 📈 Job-based validation + full history
 - 🏆 Leaderboard with duplicate detection
-- 🧪 Example optimizer clients: GPOptimizer.py (sklearn GP) and XoptOptimizer.py (Xopt package)
+- 🧪 Example optimizer clients: clients/gp_optimizer.py and clients/xopt_optimizer.py
+```
 
 ## License
 

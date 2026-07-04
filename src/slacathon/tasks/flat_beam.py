@@ -1,9 +1,13 @@
 import numpy as np
-import os
 import time
 from pydantic import BaseModel
 
-from tasks.base import TaskInput, TaskResult
+from .base import TaskInput, TaskResult
+
+try:
+    import importlib.resources as pkg_resources
+except ImportError:
+    import importlib_resources as pkg_resources  # backport for older py
 
 
 class Input(TaskInput):
@@ -38,7 +42,9 @@ def readsigma4(fname):
 
 
 L = 0.15
-fname = os.path.join(os.path.dirname(__file__), "fort.1")
+# Load fort.1 via importlib.resources so it works whether installed or run from src/
+fort1_path = pkg_resources.files("slacathon.tasks.data") / "fort.1"
+fname = str(fort1_path)
 sigma4 = readsigma4(fname)
 
 

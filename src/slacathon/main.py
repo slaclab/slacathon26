@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Body
 from fastapi.responses import RedirectResponse, HTMLResponse
-from task_loader import load_active_task
-from middleware import (
+from .task_loader import load_active_task
+from .middleware import (
     verify_api_key, 
     get_tracker, 
     UserSubmissionTracker, 
@@ -9,7 +9,7 @@ from middleware import (
     get_leaderboard,
     get_display_name,
 )
-from job_manager import (
+from .job_manager import (
     create_job,
     get_job,
     complete_job,
@@ -21,7 +21,8 @@ import asyncio
 import logging
 import time
 
-from settings import settings
+from .settings import settings
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +31,9 @@ app = FastAPI(root_path=settings.root_path)
 TASK = load_active_task()
 logger.info(f"Loaded task: {getattr(TASK, 'TASK_NAME', 'Unknown')}")
 
-with open("index.html", "r") as f:
-    landing_page_html = f.read()
-
-with open("leaderboard.html", "r") as f:
-    leaderboard_page_html = f.read()
-
-with open("team.html", "r") as f:
-    team_page_html = f.read()
+landing_page_html = (Path(__file__).resolve().parent.parent.parent / "web/index.html").read_text()
+leaderboard_page_html = (Path(__file__).resolve().parent.parent.parent / "web/leaderboard.html").read_text()
+team_page_html = (Path(__file__).resolve().parent.parent.parent / "web/team.html").read_text()
 
 
 def _extract_input_data(body: dict) -> dict:

@@ -1,5 +1,5 @@
 import numpy as np
-from GPOptimizer import GPOptimizer
+from gp_optimizer import GPOptimizer
 
 API_KEY = "key_123"
 BASE_URL = "https://halavanau.group/slacathon26"
