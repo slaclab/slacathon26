@@ -24,7 +24,7 @@ assert len(fixed_labels) == len(FIXED_VALUES), "Number of fixed values must matc
 
 # Create a VOCS using only the free variables
 vocs = VOCS(
-    variables={label: bnd for label, bnd in zip(FREE_LABELS, FREE_BOUNDS)},
+    variables={label: list(bnd) for label, bnd in zip(FREE_LABELS, FREE_BOUNDS)},
     objectives={"score": "MINIMIZE"},
 )
 
