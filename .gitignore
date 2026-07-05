@@ -159,6 +159,8 @@ Thumbs.db
 jobs.json
 leaderboard.json
 user_names.json
+data/slacathon.db
+data/slacathon.db-*   # WAL and shared memory files for SQLite
 
 # Log files
 *.log

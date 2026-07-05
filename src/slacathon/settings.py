@@ -1,7 +1,6 @@
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-from typing import List
 
 def _data_file(name: str) -> str:
     # Resolve relative to repo root (src/slacathon/settings.py -> parents[2])
@@ -20,7 +19,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # str (not List) so sources never attempt json-decode on comma string
+    # str (not list) so sources never attempt json-decode on comma string
     api_keys: str = Field(default="", description="Comma or space separated list of valid API keys")
 
     # Task configuration
@@ -35,8 +34,7 @@ class Settings(BaseSettings):
 
     # File paths (resolved relative to repo root for cwd-independence; .env can override with relative or absolute)
     leaderboard_file: str = Field(default_factory=lambda: _data_file("data/leaderboard.json"))
-    user_names_file: str = Field(default_factory=lambda: _data_file("data/user_names.json"))
-    jobs_file: str = Field(default_factory=lambda: _data_file("data/jobs.json"))
+    db_file: str = Field(default_factory=lambda: _data_file("data/slacathon.db"))
 
     # Limits
     max_queries_per_user: int = Field(default=10)
@@ -64,7 +62,7 @@ if isinstance(settings.api_keys, str):
     object.__setattr__(settings, "api_keys", parsed)
 
 # Normalize file paths to absolute using repo root (supports relative overrides in .env, works from any cwd)
-for key in ('leaderboard_file', 'user_names_file', 'jobs_file'):
+for key in ('leaderboard_file', 'db_file'):
     val = getattr(settings, key)
     if val and not Path(val).is_absolute():
         object.__setattr__(settings, key, _data_file(val))

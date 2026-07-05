@@ -1,5 +1,3 @@
-import json
-import os
 import time
 import threading
 import uuid
@@ -8,86 +6,52 @@ import math
 import numpy as np
 
 from .settings import settings
+from .db import (
+    init_db,
+    load_jobs as db_load_jobs,
+    insert_job,
+    update_job,
+    charge_quota,
+    get_user_charge_count,
+    get_job as db_get_job,
+)
 
 logger = logging.getLogger(__name__)
-
-JOBS_FILE = settings.jobs_file
 
 MAX_VALIDATIONS_PER_USER = settings.max_validations_per_user
 
 jobs: dict = {}
 jobs_lock = threading.RLock()
-append_lock = threading.Lock()
-
-# Live per-user validation counts (populated after rebuilder definition below).
-# Quota ownership consolidated in job_manager.
-user_validation_counts: dict = {}
 
 
 def load_jobs():
+    """Load jobs from the database into the in-memory cache. Returns the jobs dict."""
     global jobs
-    jobs = {}
-    if not os.path.exists(JOBS_FILE):
-        logger.info("No existing jobs file found, starting fresh")
-        return
+    init_db()
     try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        recent_lines = lines[-300:]
-        for line in recent_lines:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                job = json.loads(line)
-                if isinstance(job, dict) and "job_id" in job:
-                    jobs[job["job_id"]] = job
-            except Exception:
-                continue
-        logger.info(f"Loaded {len(jobs)} recent jobs into memory (full history kept in the file)")
-
+        jobs = db_load_jobs()
+        logger.info(f"Loaded {len(jobs)} jobs from database")
     except Exception as e:
-        logger.error(f"Failed to load jobs: {e}")
+        logger.error(f"Failed to load jobs from database: {e}")
         jobs = {}
-
-
-def _append_job_record(job_record: dict) -> bool:
-    try:
-        with append_lock:
-            with open(JOBS_FILE, "a") as f:
-                f.write(json.dumps(job_record) + "\n")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to append job record: {e}")
-        return False
+    return jobs
 
 
 def get_job(job_id: str) -> dict | None:
     with jobs_lock:
         if job_id in jobs:
             return jobs[job_id]
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                if rec.get("job_id") == job_id:
-                    with jobs_lock:
-                        jobs[job_id] = rec
-                    return rec
-            except Exception:
-                continue
-    except Exception:
-        pass
+    # Fallback to database (single lookup)
+    rec = db_get_job(job_id)
+    if rec:
+        with jobs_lock:
+            jobs[job_id] = rec
+        return rec
     return None
 
 
 def create_job(user_id: str, input_data: dict) -> str:
-    """Thin wrapper: build job record then delegate to charge (single owner for check+persist+count)."""
+    """Build job record, charge quota (durable), persist to DB and memory."""
     job_id = str(uuid.uuid4())
     job_record = {
         "job_id": job_id,
@@ -99,6 +63,7 @@ def create_job(user_id: str, input_data: dict) -> str:
         "completed_at": None
     }
     charge_validation_quota(user_id, record=job_record)
+    insert_job(job_record)  # persist job row to DB
     with jobs_lock:
         jobs[job_id] = job_record
     logger.info(f"Created job {job_id} for user {user_id}")
@@ -106,16 +71,20 @@ def create_job(user_id: str, input_data: dict) -> str:
 
 
 def charge_validation_quota(user_id: str, *, record: dict) -> None:
-    """Single durable primitive: check limit (raise 429), append record, inc count ONLY on successful append.
-    Used by both /validate (full job record) and /submit (minimal record) so both paths persist and are counted on restart.
+    """Atomic quota enforcement.
+
+    Delegates to the DB layer for an atomic check + insert (using BEGIN IMMEDIATE)
+    to avoid TOCTOU races. Updates the in-memory count from the authoritative DB result.
+    Used by both /validate and /submit paths.
     """
-    current = user_validation_counts.get(user_id, 0)
-    if current >= MAX_VALIDATIONS_PER_USER:
-        raise RuntimeError(
-            f"Validation limit of {MAX_VALIDATIONS_PER_USER} reached for this API key"
-        )
-    if _append_job_record(record):
-        user_validation_counts[user_id] = current + 1
+    job_id = record.get("job_id")
+    kind = record.get("kind", "validate" if job_id else "submit")
+    charged_at = record.get("created_at", time.time())
+
+    # This call is fully atomic in the database
+    charge_quota(
+        user_id, MAX_VALIDATIONS_PER_USER, charged_at, job_id, kind
+    )
 
 
 def make_json_safe(obj):
@@ -139,46 +108,22 @@ def make_json_safe(obj):
 
 def complete_job(job_id: str, result: dict):
     safe_result = make_json_safe(result)
-    job_record = None
     with jobs_lock:
         if job_id in jobs:
             jobs[job_id]["status"] = "completed"
             jobs[job_id]["result"] = safe_result
             jobs[job_id]["completed_at"] = time.time()
-            job_record = dict(jobs[job_id])
-    if job_record:
-        _append_job_record(job_record)
-        logger.info(f"Job {job_id} completed with score {safe_result.get('score')}")
+    # Persist update to DB (single row per job)
+    update_job(
+        job_id,
+        status="completed",
+        result=safe_result,
+        completed_at=time.time(),
+    )
+    logger.info(f"Job {job_id} completed with score {safe_result.get('score')}")
 
 
-load_jobs()
 
-def get_user_validation_counts() -> dict:
-    """Rebuild user validation counts from full jobs history for accurate quota at startup."""
-    counts = {}
-    if not os.path.exists(JOBS_FILE):
-        return counts
-    seen = {}
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    job = json.loads(line)
-                    uid = job.get("user_id")
-                    jid = job.get("job_id")
-                    if uid and jid:
-                        # count unique jobs per user (file has process+complete lines)
-                        if (uid, jid) not in seen:
-                            seen[(uid, jid)] = True
-                            counts[uid] = counts.get(uid, 0) + 1
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return counts
 
 
 def set_max_validations_per_user(limit: int):
@@ -189,9 +134,13 @@ def set_max_validations_per_user(limit: int):
 
 
 def get_quota_info(user_id: str) -> dict:
-    """Return quota status for API responses. Single source of truth (eliminates duplication in main.py)."""
+    """Return quota status for API responses.
+
+    Uses live count from the database as the source of truth (prevents drift).
+    The in-memory cache is still maintained for other internal use.
+    """
     limit = MAX_VALIDATIONS_PER_USER
-    used = user_validation_counts.get(user_id, 0)
+    used = get_user_charge_count(user_id)
     return {
         "used": used,
         "limit": limit,
@@ -199,6 +148,6 @@ def get_quota_info(user_id: str) -> dict:
     }
 
 
-# Populate live counts from job history now that the rebuilder function is defined.
-# This replaces the previous assignment that lived in middleware.py.
-user_validation_counts = get_user_validation_counts()
+# Initialize DB and populate in-memory job cache from it.
+init_db()
+load_jobs()

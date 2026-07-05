@@ -6,9 +6,9 @@ import time
 import json
 import os
 import threading
-import numpy as np
 
 from .settings import settings
+from .db import init_db, load_users, get_valid_api_keys as db_get_valid_api_keys, upsert_user
 
 from .task_loader import load_active_task
 # Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
@@ -23,50 +23,41 @@ logger = logging.getLogger(__name__)
 MAX_QUERIES_PER_USER = settings.max_queries_per_user
 LEADERBOARD_SIZE = settings.leaderboard_size
 LEADERBOARD_FILE = settings.leaderboard_file
-USER_NAMES_FILE = settings.user_names_file
+
+leaderboard_lock = threading.RLock()
 
 def _load_valid_api_keys() -> set:
+    init_db()
+    keys = set()
     if settings.api_keys:
         keys = set(settings.api_keys)
         logger.info(f"Loaded {len(keys)} API key(s) from settings")
-        return keys
 
-    logger.warning(
-        "No API keys configured in settings. Using hardcoded development keys. "
-        "This is insecure — set SLACATHON_API_KEYS in your environment."
-    )
-    return {"key_123", "key_456", "key_789"}
+    db_keys = db_get_valid_api_keys()
+    if db_keys:
+        keys |= db_keys
+        logger.info(f"Loaded {len(db_keys)} API key(s) from database")
+
+    if not keys:
+        logger.warning(
+            "No API keys configured in settings. Using hardcoded development keys. "
+            "This is insecure — set SLACATHON_API_KEYS in your environment."
+        )
+        keys = {"key_123", "key_456", "key_789"}
+    return keys
 
 
 VALID_API_KEYS = _load_valid_api_keys()
 
-user_names_fallback = {
-    "key_123": "Alex",
-    "key_456": "Chris",
-    "key_789": "Ken",
-}
 
 def load_user_names() -> Dict[str, str]:
-    if os.path.exists(USER_NAMES_FILE):
-        try:
-            with open(USER_NAMES_FILE, 'r') as f:
-                names = json.load(f)
-                logger.info(f"Loaded {len(names)} user names from file")
-                return names
-        except Exception as e:
-            logger.error(f"Failed to load user names: {e}")
-            return user_names_fallback.copy()
-    else:
-        save_user_names(user_names_fallback)
-        return user_names_fallback.copy()
+    """Load user names from the database (post-migration)."""
+    init_db()
+    names = load_users() or {}
+    if names:
+        logger.info(f"Loaded {len(names)} user names from database")
+    return names
 
-def save_user_names(names: Dict[str, str]):
-    try:
-        with open(USER_NAMES_FILE, 'w') as f:
-            json.dump(names, f, indent=2)
-        logger.info(f"Saved {len(names)} user names to file")
-    except Exception as e:
-        logger.error(f"Failed to save user names: {e}")
 
 user_names = load_user_names()
 
@@ -127,16 +118,19 @@ def load_leaderboard() -> List[LeaderboardEntry]:
         logger.info("No existing leaderboard file found, starting fresh")
         return []
 
-def save_leaderboard():
+def _atomic_save_leaderboard(data):
+    """Write leaderboard data atomically to prevent corruption on concurrent writes."""
     try:
-        data = [entry.to_storage_dict() for entry in leaderboard]
-        with open(LEADERBOARD_FILE, 'w') as f:
+        tmp_path = LEADERBOARD_FILE + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(data, f, indent=2)
-        logger.info(f"Saved {len(leaderboard)} entries to leaderboard file")
+        os.replace(tmp_path, LEADERBOARD_FILE)
+        logger.info(f"Saved {len(data)} entries to leaderboard file")
     except Exception as e:
         logger.error(f"Failed to save leaderboard: {e}")
 
-leaderboard = load_leaderboard()
+with leaderboard_lock:
+    leaderboard = load_leaderboard()
 
 class UserSubmissionTracker:
     def __init__(self, max_queries: int):
@@ -161,35 +155,45 @@ user_tracker = UserSubmissionTracker(MAX_QUERIES_PER_USER)
 def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     global leaderboard
 
-    for existing in leaderboard:
-        if existing.input == input:
-            logger.info(f"Duplicate solution submitted by {get_display_name(user_id)}, ignoring.")
-            return None
+    with leaderboard_lock:
+        for existing in leaderboard:
+            if existing.input == input:
+                logger.info(f"Duplicate solution submitted by {get_display_name(user_id)}, ignoring.")
+                return None
 
-    entry = LeaderboardEntry(user_id, input, score, solved, time.time())
-    leaderboard.append(entry)
-    
-    # Sort respecting task direction (lower better if minimize)
-    try:
-        task = load_active_task()
-        minimize = getattr(task, "MINIMIZE", True)
-    except Exception:
-        minimize = True
-    leaderboard.sort(key=lambda x: x.score, reverse=not minimize)
-    leaderboard = leaderboard[:LEADERBOARD_SIZE]
-    
-    display_name = get_display_name(user_id)
-    logger.info(f"Leaderboard updated. User: {display_name}, Score: {score:.6f}, Total entries: {len(leaderboard)}")
-    save_leaderboard()
+        entry = LeaderboardEntry(user_id, input, score, solved, time.time())
+        leaderboard.append(entry)
+        
+        # Sort respecting task direction (lower better if minimize)
+        try:
+            task = load_active_task()
+            minimize = getattr(task, "MINIMIZE", True)
+        except Exception:
+            minimize = True
+        leaderboard.sort(key=lambda x: x.score, reverse=not minimize)
+        leaderboard = leaderboard[:LEADERBOARD_SIZE]
+        
+        display_name = get_display_name(user_id)
+        logger.info(f"Leaderboard updated. User: {display_name}, Score: {score:.6f}, Total entries: {len(leaderboard)}")
+        
+        # Compute rank while still holding the lock (so 'is entry' is reliable)
+        rank = None
+        for i, e in enumerate(leaderboard, 1):
+            if e is entry:
+                rank = i
+                break
 
-    # Return the final rank of *this* entry (1-based), or None if it didn't make the top N
-    for i, e in enumerate(leaderboard, 1):
-        if e is entry:
-            return i
-    return None
+        # Snapshot data for save (still under lock)
+        data_to_save = [entry.to_storage_dict() for entry in leaderboard]
+
+    # Save outside the lock to avoid holding it during I/O
+    _atomic_save_leaderboard(data_to_save)
+
+    return rank
 
 def get_leaderboard() -> List[dict]:
-    return [entry.to_dict() for entry in leaderboard]
+    with leaderboard_lock:
+        return [entry.to_dict() for entry in leaderboard]
 
 async def verify_api_key(x_api_key: str = Header(...)) -> str:
     if x_api_key not in VALID_API_KEYS:
