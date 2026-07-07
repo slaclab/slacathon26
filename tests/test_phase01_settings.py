@@ -4,9 +4,11 @@ from app.settings import settings
 
 
 def test_smtp_defaults():
-    assert settings.smtp_host == "localhost"
-    assert settings.smtp_port == 1025
-    assert settings.smtp_from == "noreply@slacathon26.local"
+    from app.settings import Settings
+    fields = Settings.model_fields
+    assert fields["smtp_host"].default == "localhost"
+    assert fields["smtp_port"].default == 1025
+    assert fields["smtp_from"].default == "noreply@slacathon26.local"
 
 
 def test_public_url_default():

@@ -1,0 +1,76 @@
+{% extends "_base_crt.html.j2" %}
+
+{% block title %}RESEND API KEY{% endblock %}
+
+{% block head_extra %}
+<script type="module" src="{{ root_path }}/static/altcha.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<a href="{{ root_path }}/" class="back">← Return to Landing</a>
+<div class="title">SLACATHON 2026</div>
+<div class="subtitle">Retrieve API Key — resend to your inbox</div>
+
+<form id="resend-form">
+  <label for="email">EMAIL ADDRESS</label>
+  <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+
+  <altcha-widget challengeurl="{{ root_path }}/captcha-challenge" name="altcha"></altcha-widget>
+
+  <button type="submit">[ RESEND API KEY ]</button>
+</form>
+
+<div id="msg" class="msg"></div>
+
+<script>
+document.getElementById('resend-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  msg.innerHTML = '';
+
+  const widget = document.querySelector('altcha-widget');
+  const altchaPayload = new FormData(document.getElementById('resend-form')).get('altcha') || '';
+  if (!altchaPayload) {
+    msg.className = 'msg error';
+    msg.textContent = 'ERROR: Complete the CAPTCHA first.';
+    return;
+  }
+
+  const payload = {
+    email: document.getElementById('email').value.trim(),
+    altcha_payload: altchaPayload,
+  };
+
+  try {
+    const res = await fetch('{{ root_path }}/resend-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      msg.className = 'msg ok';
+      msg.textContent = '> API key sent — check your inbox.';
+      document.getElementById('resend-form').style.display = 'none';
+    } else if (res.status === 404) {
+      msg.className = 'msg error';
+      msg.innerHTML =
+        'ERROR: No verified account found for that email.<br>' +
+        '<a href="{{ root_path }}/" style="color:#00aaff;text-decoration:none;">← home</a>' +
+        ' &nbsp;|&nbsp; ' +
+        '<a href="{{ root_path }}/register" style="color:#00aaff;text-decoration:none;">register →</a>';
+      if (widget) widget.reset();
+    } else {
+      msg.className = 'msg error';
+      msg.textContent = 'ERROR: ' + (data.detail || res.status);
+      if (widget) widget.reset();
+    }
+  } catch (err) {
+    msg.className = 'msg error';
+    msg.textContent = 'NETWORK ERROR — try again.';
+    if (widget) widget.reset();
+  }
+});
+</script>
+{% endblock %}

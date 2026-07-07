@@ -22,6 +22,28 @@
       },
       "jinja": true,
       "justMyCode": false
+    },
+    {
+      "name": "Run Backend (uvicorn dev)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"],
+      "env": {
+        "SLACATHON_API_KEYS": "dev-key-1,dev-key-2",
+        "SLACATHON_ACTIVE_TASK": "flat_beam",
+        "SLACATHON_ROOT_PATH": "/slacathon26",
+        "SLACATHON_PORT": "8000",
+        "SLACATHON_SMTP_HOST": "mailpit",
+        "SLACATHON_SMTP_PORT": "1025",
+        "SLACATHON_SMTP_FROM": "noreply@slacathon26.local",
+        "SLACATHON_PUBLIC_URL": "http://localhost:8000",
+        "SLACATHON_VERIFY_TIMEOUT_HOURS": "24",
+        "SLACATHON_CLEANUP_INTERVAL_MINUTES": "10",
+        "SLACATHON_ALTCHA_HMAC_KEY": "dev-hmac-key-change-in-prod"
+      },
+      "jinja": true,
+      "justMyCode": false
     }
   ]
 }

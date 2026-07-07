@@ -49,7 +49,7 @@ def test_devcontainer_forwards_mailpit_port():
     with open(".devcontainer/devcontainer.json") as f:
         cfg = json.load(f)
     ports = cfg.get("forwardPorts", [])
-    assert 8025 in ports
+    assert any(p == 8025 or str(p).endswith(":8025") for p in ports)
 
 
 def test_env_example_has_new_vars():

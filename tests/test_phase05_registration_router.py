@@ -104,6 +104,26 @@ def test_post_register_replaces_unverified(client, mem_engine):
         assert users[0].display_name == "U2"
 
 
+def test_post_register_email_failure_returns_503_and_rolls_back(client, mem_engine):
+    from app.models.user import User
+    from sqlmodel import select
+
+    with patch("app.routers.registration.send_verification_email", new_callable=AsyncMock) as mocked_send:
+        mocked_send.side_effect = RuntimeError("smtp down")
+        resp = client.post("/register", json={
+            "email": "mailfail@test.com",
+            "display_name": "MF",
+            "altcha_payload": "fake",
+        })
+
+    assert resp.status_code == 503
+    assert "email service unavailable" in resp.json()["detail"].lower()
+
+    with Session(mem_engine) as s:
+        user = s.exec(select(User).where(User.email == "mailfail@test.com")).first()
+        assert user is None
+
+
 def test_get_verify_page_no_token(client):
     resp = client.get("/verify")
     assert resp.status_code == 200

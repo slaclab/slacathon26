@@ -32,9 +32,43 @@ class VerifyRequest(BaseModel):
     altcha_payload: str
 
 
+class ResendKeyRequest(BaseModel):
+    email: EmailStr
+    altcha_payload: str
+
+
 @router.get("/captcha-challenge")
 async def captcha_challenge():
     return create_challenge()
+
+
+@router.get("/resend-key", response_class=HTMLResponse)
+async def resend_key_page(request: Request):
+    return _templates.TemplateResponse(
+        request, "resend_key.html.j2",
+        {"root_path": settings.root_path},
+    )
+
+
+@router.post("/resend-key", status_code=200)
+async def resend_key(body: ResendKeyRequest, session: Session = Depends(get_session)):
+    verify_captcha(body.altcha_payload)
+    user: Optional[User] = session.exec(
+        select(User).where(User.email == body.email, User.verified == True)  # noqa: E712
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="No verified account found for that email")
+    await send_api_key_email(user.email, user.api_key)
+    logger.info("API key resent for %s", user.email)
+    return {"detail": "API key sent — check your inbox"}
+
+
+@router.get("/registered", response_class=HTMLResponse)
+async def registered_page(request: Request):
+    return _templates.TemplateResponse(
+        request, "registered.html.j2",
+        {"root_path": settings.root_path},
+    )
 
 
 @router.get("/register", response_class=HTMLResponse)
@@ -73,7 +107,14 @@ async def register(body: RegisterRequest, session: Session = Depends(get_session
     session.commit()
 
     verify_url = f"{settings.public_url}{settings.root_path}/verify?token={verify_token}"
-    await send_verification_email(body.email, verify_url, settings.verify_timeout_hours)
+    try:
+        await send_verification_email(body.email, verify_url, settings.verify_timeout_hours)
+    except Exception:
+        logger.exception("Failed to send verification email for %s", body.email)
+        # Keep registration atomic: if email cannot be delivered, remove the pending user.
+        session.delete(user)
+        session.commit()
+        raise HTTPException(status_code=503, detail="Email service unavailable. Please try again in a moment.")
 
     logger.info(f"Registration initiated for {body.email}")
     return {"detail": "Check your email — verification link sent"}
@@ -117,4 +158,4 @@ async def verify_email(body: VerifyRequest, session: Session = Depends(get_sessi
     await send_api_key_email(user.email, user.api_key)
     logger.info(f"Email verified for {user.email}")
 
-    return RedirectResponse(url=f"{settings.root_path}/?registered=1", status_code=303)
+    return RedirectResponse(url=f"{settings.root_path}/registered", status_code=303)
