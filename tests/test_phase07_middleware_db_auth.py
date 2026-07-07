@@ -73,24 +73,29 @@ def test_get_display_name_unknown(mem_engine):
         assert get_display_name("no_such_key", s) == "Anonymous"
 
 
-def test_leaderboard_entry_display_name_snapshot():
-    from app.core.middleware import LeaderboardEntry
-    e = LeaderboardEntry("uid1", "Alice", {"q1": 0.1}, 0.5, False, 1000.0)
-    d = e.to_dict()
-    assert d["user"] == "Alice"
-
-
-def test_leaderboard_entry_from_dict_compat():
-    """Old JSON without display_name field must load as Anonymous."""
-    from app.core.middleware import LeaderboardEntry
-    old_record = {"user_id": "uid1", "input": {}, "score": 0.5, "solved": False, "timestamp": 1000.0}
-    e = LeaderboardEntry.from_dict(old_record)
-    assert e.display_name == "Anonymous"
+def test_leaderboard_entry_db_model(mem_engine):
+    import json
+    from app.models.leaderboard_entry import LeaderboardEntry
+    from sqlmodel import SQLModel
+    SQLModel.metadata.create_all(mem_engine)
+    entry = LeaderboardEntry(
+        user_id="uid1", display_name="Alice",
+        input_json=json.dumps({"q1": 0.1}),
+        score=0.5, solved=False, timestamp=1000.0,
+    )
+    with Session(mem_engine) as s:
+        s.add(entry)
+        s.commit()
+        s.refresh(entry)
+    assert entry.display_name == "Alice"
+    assert entry.score == 0.5
 
 
 def test_add_to_leaderboard_with_session(mem_engine):
     from app.core.middleware import add_to_leaderboard, get_leaderboard
+    from sqlmodel import SQLModel
+    SQLModel.metadata.create_all(mem_engine)
     with Session(mem_engine) as s:
         rank = add_to_leaderboard("good_key", {"q1": 0.2}, 0.42, False, s)
-    board = get_leaderboard()
+        board = get_leaderboard(s)
     assert any(e["user"] == "Alice" for e in board)

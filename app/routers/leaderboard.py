@@ -1,19 +1,23 @@
-from fastapi import APIRouter
-from fastapi.responses import RedirectResponse
+import json
 import logging
 
-from app.core.middleware import get_leaderboard, get_display_name, verify_api_key, get_tracker, UserSubmissionTracker
+from fastapi import APIRouter, Depends
+from sqlmodel import Session as DBSession, select
+
+from app.core.middleware import get_leaderboard, get_display_name, verify_api_key
 from app.core.task_loader import load_active_task
-from fastapi import Depends
+from app.db import get_session
+from app.models.job import Job
+from app.settings import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("/leaderboard")
-async def view_leaderboard():
+async def view_leaderboard(session: DBSession = Depends(get_session)):
     logger.info("Leaderboard API request received")
-    board = get_leaderboard()
+    board = get_leaderboard(session)
     return {
         "total_entries": len(board),
         "leaderboard": board
@@ -39,18 +43,24 @@ async def get_task_info():
 @router.get("/history")
 async def get_history(
     api_key: str = Depends(verify_api_key),
-    tracker: UserSubmissionTracker = Depends(get_tracker)
+    session: DBSession = Depends(get_session),
 ):
-    user = get_display_name(api_key)
+    user = get_display_name(api_key, session)
     logger.info(f"History request from user: {user}")
 
-    history = tracker.get_recent_submissions(api_key)
-    count = tracker.get_submission_count(api_key)
+    jobs = session.exec(
+        select(Job).where(Job.user_id == api_key)
+        .order_by(Job.created_at.desc())
+        .limit(settings.max_queries_per_user)
+    ).all()
+
+    history = [json.loads(j.input_json) for j in jobs]
+    count = len(jobs)
 
     logger.info(f"Returning {count} submissions for user: {user}")
 
     return {
         "user": user,
         "total_submissions": count,
-        "history": history
+        "history": history,
     }

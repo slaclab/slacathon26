@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Body
 import asyncio
 import logging
-import time
 
-from app.core.middleware import verify_api_key, get_tracker, UserSubmissionTracker, get_display_name
-from app.db import get_session
 from sqlmodel import Session as DBSession
+
+from app.core.middleware import verify_api_key, get_display_name
+from app.db import get_session, engine
 from app.core.job_manager import (
     create_job,
     get_job,
@@ -34,48 +34,46 @@ async def run_validation_job(job_id: str, input_data: dict):
         result = await loop.run_in_executor(None, lambda d: TASK.validate(d).model_dump(), input_data)
         logger.info(f"Background job {job_id} computation done, applying delay...")
         await asyncio.sleep(1.0)
-        complete_job(job_id, result)
+        with DBSession(engine) as session:
+            complete_job(job_id, result, session)
         logger.info(f"Background job {job_id} finished and result stored.")
     except Exception as e:
         logger.error(f"Background job {job_id} failed: {e}", exc_info=True)
-        job = get_job(job_id)
-        if job:
+        with DBSession(engine) as session:
             complete_job(job_id, {
                 "solved": False,
                 "score": getattr(TASK, "FAILURE_SCORE", 1.0e10),
                 "message": f"Job failed: {str(e)}",
                 "evaltime": 0.0
-            })
+            }, session)
 
 
 @router.post("/validate")
 async def validate(
     body: dict = Body(...),
     api_key: str = Depends(verify_api_key),
-    tracker: UserSubmissionTracker = Depends(get_tracker)
+    session: DBSession = Depends(get_session),
 ):
     TASK = load_active_task()
     input_data = _extract_input_data(body)
-    logger.info(f"Validation job request received from user: {get_display_name(api_key)}")
+    logger.info(f"Validation job request received from user: {get_display_name(api_key, session)}")
     logger.info(f"Submitted input: {input_data}")
 
     try:
         if isinstance(input_data, dict):
             TASK.Input(**input_data)
 
-        tracker.add_submission(api_key, input_data)
-
-        job_id = create_job(api_key, input_data)
+        job_id = create_job(api_key, input_data, session)
 
         asyncio.create_task(run_validation_job(job_id, input_data))
 
-        logger.info(f"Validation job {job_id} enqueued for user {get_display_name(api_key)}")
+        logger.info(f"Validation job {job_id} enqueued for user {get_display_name(api_key, session)}")
 
         return {
             "job_id": job_id,
             "status": "processing",
             "message": "Submission recorded. Validation is running in the background (this can take time). Poll GET /jobs/{job_id} to retrieve the result when ready.",
-            "quota": get_quota_info(api_key)
+            "quota": get_quota_info(api_key, session)
         }
     except RuntimeError as e:
         raise HTTPException(status_code=429, detail=str(e))
@@ -99,10 +97,7 @@ async def submit_result(
     logger.info(f"Submitted input: {input_data}")
 
     try:
-        charge_validation_quota(
-            api_key,
-            record={"user_id": api_key, "kind": "submit", "created_at": time.time()}
-        )
+        charge_validation_quota(api_key, session)
 
         validated_input = TASK.Input(**input_data)
         result = TASK.validate(validated_input).model_dump()
@@ -116,7 +111,7 @@ async def submit_result(
             session=session,
         )
 
-        board = get_leaderboard()
+        board = get_leaderboard(session)
         display_name = get_display_name(api_key, session)
 
         return {
@@ -139,9 +134,10 @@ async def submit_result(
 @router.get("/jobs/{job_id}")
 async def get_job_status(
     job_id: str,
-    api_key: str = Depends(verify_api_key)
+    api_key: str = Depends(verify_api_key),
+    session: DBSession = Depends(get_session),
 ):
-    job = get_job(job_id)
+    job = get_job(job_id, session)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -159,6 +155,6 @@ async def get_job_status(
         response["result"] = make_json_safe(job["result"])
         response["completed_at"] = job.get("completed_at")
 
-    response["quota"] = get_quota_info(api_key)
+    response["quota"] = get_quota_info(api_key, session)
 
     return response

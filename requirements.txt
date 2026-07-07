@@ -13,3 +13,5 @@ pytest
 pytest-asyncio
 anyio[trio]
 httpx2
+requests
+scikit-learn

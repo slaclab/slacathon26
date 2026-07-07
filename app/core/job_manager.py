@@ -1,119 +1,24 @@
 import json
-import os
 import time
-import threading
 import uuid
 import logging
 import math
 import numpy as np
 
+from sqlmodel import Session, select
+
 from app.settings import settings
+from app.models.job import Job
 
 logger = logging.getLogger(__name__)
 
-JOBS_FILE = settings.jobs_file
-
 MAX_VALIDATIONS_PER_USER = settings.max_validations_per_user
 
-jobs: dict = {}
-jobs_lock = threading.RLock()
-append_lock = threading.Lock()
 
-user_validation_counts: dict = {}
-
-
-def load_jobs():
-    global jobs
-    jobs = {}
-    if not os.path.exists(JOBS_FILE):
-        logger.info("No existing jobs file found, starting fresh")
-        return
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        recent_lines = lines[-300:]
-        for line in recent_lines:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                job = json.loads(line)
-                if isinstance(job, dict) and "job_id" in job:
-                    jobs[job["job_id"]] = job
-            except Exception:
-                continue
-        logger.info(f"Loaded {len(jobs)} recent jobs into memory (full history kept in the file)")
-
-    except Exception as e:
-        logger.error(f"Failed to load jobs: {e}")
-        jobs = {}
-
-
-def _append_job_record(job_record: dict) -> bool:
-    try:
-        with append_lock:
-            with open(JOBS_FILE, "a") as f:
-                f.write(json.dumps(job_record) + "\n")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to append job record: {e}")
-        return False
-
-
-def get_job(job_id: str) -> dict | None:
-    with jobs_lock:
-        if job_id in jobs:
-            return jobs[job_id]
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            lines = f.readlines()
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rec = json.loads(line)
-                if rec.get("job_id") == job_id:
-                    with jobs_lock:
-                        jobs[job_id] = rec
-                    return rec
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
-
-
-def create_job(user_id: str, input_data: dict) -> str:
-    """Thin wrapper: build job record then delegate to charge (single owner for check+persist+count)."""
-    job_id = str(uuid.uuid4())
-    job_record = {
-        "job_id": job_id,
-        "user_id": user_id,
-        "input": input_data,
-        "status": "processing",
-        "result": None,
-        "created_at": time.time(),
-        "completed_at": None
-    }
-    charge_validation_quota(user_id, record=job_record)
-    with jobs_lock:
-        jobs[job_id] = job_record
-    logger.info(f"Created job {job_id} for user {user_id}")
-    return job_id
-
-
-def charge_validation_quota(user_id: str, *, record: dict) -> None:
-    """Single durable primitive: check limit (raise 429), append record, inc count ONLY on successful append.
-    Used by both /validate (full job record) and /submit (minimal record) so both paths persist and are counted on restart.
-    """
-    current = user_validation_counts.get(user_id, 0)
-    if current >= MAX_VALIDATIONS_PER_USER:
-        raise RuntimeError(
-            f"Validation limit of {MAX_VALIDATIONS_PER_USER} reached for this API key"
-        )
-    if _append_job_record(record):
-        user_validation_counts[user_id] = current + 1
+def set_max_validations_per_user(limit: int):
+    global MAX_VALIDATIONS_PER_USER
+    MAX_VALIDATIONS_PER_USER = limit
+    logger.info(f"Validation limit set to {limit} (from active task or settings)")
 
 
 def make_json_safe(obj):
@@ -135,65 +40,66 @@ def make_json_safe(obj):
     return obj
 
 
-def complete_job(job_id: str, result: dict):
-    safe_result = make_json_safe(result)
-    job_record = None
-    with jobs_lock:
-        if job_id in jobs:
-            jobs[job_id]["status"] = "completed"
-            jobs[job_id]["result"] = safe_result
-            jobs[job_id]["completed_at"] = time.time()
-            job_record = dict(jobs[job_id])
-    if job_record:
-        _append_job_record(job_record)
-        logger.info(f"Job {job_id} completed with score {safe_result.get('score')}")
-
-
-load_jobs()
-
-def get_user_validation_counts() -> dict:
-    """Rebuild user validation counts from full jobs history for accurate quota at startup."""
-    counts = {}
-    if not os.path.exists(JOBS_FILE):
-        return counts
-    seen = {}
-    try:
-        with open(JOBS_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    job = json.loads(line)
-                    uid = job.get("user_id")
-                    jid = job.get("job_id")
-                    if uid and jid:
-                        if (uid, jid) not in seen:
-                            seen[(uid, jid)] = True
-                            counts[uid] = counts.get(uid, 0) + 1
-                except Exception:
-                    continue
-    except Exception:
-        pass
-    return counts
-
-
-def set_max_validations_per_user(limit: int):
-    """Set the effective per-user validation limit (called by main after loading active task)."""
-    global MAX_VALIDATIONS_PER_USER
-    MAX_VALIDATIONS_PER_USER = limit
-    logger.info(f"Validation limit set to {limit} (from active task or settings)")
-
-
-def get_quota_info(user_id: str) -> dict:
-    """Return quota status for API responses."""
-    limit = MAX_VALIDATIONS_PER_USER
-    used = user_validation_counts.get(user_id, 0)
+def _job_to_dict(job: Job) -> dict:
     return {
-        "used": used,
-        "limit": limit,
-        "remaining": max(0, limit - used)
+        "job_id": job.id,
+        "user_id": job.user_id,
+        "input": json.loads(job.input_json),
+        "status": job.status,
+        "result": json.loads(job.result_json) if job.result_json else None,
+        "created_at": job.created_at,
+        "completed_at": job.completed_at,
     }
 
 
-user_validation_counts = get_user_validation_counts()
+def get_quota_info(user_id: str, session: Session) -> dict:
+    limit = MAX_VALIDATIONS_PER_USER
+    used = session.exec(select(Job).where(Job.user_id == user_id)).all()
+    used_count = len(used)
+    return {
+        "used": used_count,
+        "limit": limit,
+        "remaining": max(0, limit - used_count),
+    }
+
+
+def charge_validation_quota(user_id: str, session: Session) -> None:
+    used = len(session.exec(select(Job).where(Job.user_id == user_id)).all())
+    if used >= MAX_VALIDATIONS_PER_USER:
+        raise RuntimeError(
+            f"Validation limit of {MAX_VALIDATIONS_PER_USER} reached for this API key"
+        )
+
+
+def create_job(user_id: str, input_data: dict, session: Session) -> str:
+    charge_validation_quota(user_id, session)
+    job = Job(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        input_json=json.dumps(input_data),
+        status="processing",
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    logger.info(f"Created job {job.id} for user {user_id}")
+    return job.id
+
+
+def get_job(job_id: str, session: Session) -> dict | None:
+    job = session.get(Job, job_id)
+    if not job:
+        return None
+    return _job_to_dict(job)
+
+
+def complete_job(job_id: str, result: dict, session: Session):
+    safe_result = make_json_safe(result)
+    job = session.get(Job, job_id)
+    if job:
+        job.status = "completed"
+        job.result_json = json.dumps(safe_result)
+        job.completed_at = time.time()
+        session.add(job)
+        session.commit()
+        logger.info(f"Job {job_id} completed with score {safe_result.get('score')}")

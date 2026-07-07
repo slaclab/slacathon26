@@ -10,6 +10,8 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 
 def create_db_and_tables():
+    from app.models.job import Job  # noqa: F401
+    from app.models.leaderboard_entry import LeaderboardEntry  # noqa: F401
     SQLModel.metadata.create_all(engine)
     logger.info("DB tables created/verified")
     with Session(engine) as session:
