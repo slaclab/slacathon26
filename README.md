@@ -1,183 +1,96 @@
-# SLACATHON'26 DEMO - AI optimization platform for accelerators
+# SLACATHON 2026
 
-Framework for hosting AI optimization hackathons (e.g. beam physics challenges).
+AI optimization hackathon platform for accelerator physics. Competitors submit beam parameter sets via a REST API, receive physics-based scores, and compete on a public leaderboard.
 
-Supports **pluggable tasks** via the `tasks/` directory. Switch the active task with the `SLACATHON_ACTIVE_TASK` environment variable (or in `.env`, defaults to `flat_beam`).
+## Features
 
-Each task defines:
-- Input schema (Pydantic)
-- `TARGET`, `MINIMIZE` (for solved determination)
-- `FAILURE_SCORE`, `MAX_VALIDATIONS_PER_USER`
+- Pluggable task system — swap challenges via a single environment variable
+- Async job validation — fire-and-poll for long-running physics simulations
+- Email-based registration — CAPTCHA-protected sign-up with API key delivery
+- Per-user quotas — configurable validation limits per key
+- Leaderboard deduplication — identical submissions are ignored
+- SQLite persistence — jobs, leaderboard entries, and users survive restarts
+- Dev container — one-click VS Code environment with Mailpit included
 
-- Discover full task info at `GET /task` (schema, labels, bounds, target, minimize, etc.)
-- Dynamic validation using per-task Pydantic models
-- Example: Beamline Guru (default)
+## Technology Stack
 
-See the live site and optimizer clients (GPOptimizer.py, XoptOptimizer.py) for usage examples.
+| Layer | Technology |
+|-------|-----------|
+| Framework | FastAPI + Uvicorn / Gunicorn |
+| Database | SQLite via SQLModel (SQLAlchemy) |
+| Email | aiosmtplib + Jinja2 templates |
+| CAPTCHA | Altcha (self-hosted proof-of-work) |
+| Templates | Jinja2 (CRT-themed registration pages) |
+| Testing | pytest + pytest-asyncio |
 
-**Optimizer examples dependencies:**
-- `GPOptimizer.py`: `pip install numpy scipy scikit-learn`
-- `XoptOptimizer.py`: `pip install xopt numpy requests` (Xopt provides modern Bayesian optimization)
+## Quick Start
+
+```bash
+git clone https://github.com/balticfish/slacathon26.git
+cd slacathon26
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env          # edit as needed
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Server available at `http://localhost:8000/slacathon26`.
+
+## First API Call
+
+```python
+import requests, time
+
+BASE = "http://localhost:8000/slacathon26"
+HEADERS = {"X-API-Key": "key_123"}   # dev seed key
+
+r = requests.post(f"{BASE}/validate", headers=HEADERS,
+                  json={"input": {"q1": 2.25, "q2": -2.22, "q3": 0.96, "d2": 0.033, "d3": 1.413}})
+job_id = r.json()["job_id"]
+
+while True:
+    j = requests.get(f"{BASE}/jobs/{job_id}", headers=HEADERS).json()
+    if j["status"] == "completed":
+        print(j["result"])   # {"score": ..., "solved": ..., "message": ...}
+        break
+    time.sleep(1)
+```
+
+## Architecture
+
+```mermaid
+graph TD
+    User -->|HTTP| FastAPI
+    FastAPI -->|CAPTCHA| Altcha
+    FastAPI -->|Auth| DB[(SQLite)]
+    FastAPI -->|POST /validate| JobManager
+    JobManager -->|async executor| TaskEngine
+    TaskEngine -->|physics| FlatBeam
+    JobManager -->|write| DB
+    FastAPI -->|POST /submit| Leaderboard
+    Leaderboard -->|write| DB
+    FastAPI -->|GET /leaderboard| DB
+    FastAPI -->|SMTP| Mailpit
+```
+
+## Documentation
+
+| Section | Description |
+|---------|-------------|
+| [Getting Started](docs/getting-started/installation.md) | Install, configure, run |
+| [Architecture](docs/architecture/overview.md) | Components, data flow, design patterns |
+| [API Reference](docs/api/overview.md) | All endpoints with examples |
+| [Development](docs/development/local-setup.md) | Local dev, testing, contributing |
+| [Deployment](docs/deployment/docker.md) | Docker, production, environment vars |
+| [Task Development](docs/guides/task-development.md) | Write a new optimization task |
+| [Troubleshooting](docs/troubleshooting/common-issues.md) | Common errors and fixes |
 
 ## Authors
 
 - A. Halavanau (SLAC)
 - C.J. Takacs (ex-SLAC)
 - Claude Code
-- Grok Build
-
-## Installation
-
-### 1. Clone
-```bash
-git clone https://github.com/balticfish/slacathon26.git
-cd slacathon26
-```
-
-### 2. Virtualenv
-```bash
-python -m venv venv
-source venv/bin/activate
-pip install numpy scipy fastapi uvicorn gunicorn
-```
-
-### 3. Configuration
-```bash
-cp .env.example .env
-# Edit .env and set at minimum:
-#   SLACATHON_API_KEYS=your_strong_key_1,your_strong_key_2
-#   SLACATHON_ACTIVE_TASK=flat_beam
-```
-
-All settings use the `SLACATHON_` prefix (see `.env.example` for full list: keys, host/port, files, limits, root_path, etc.).
-
-### 4. Run
-```bash
-./start.sh
-```
-
-Or for development:
-```bash
-source venv/bin/activate
-uvicorn main:app --reload
-```
-
-**Note:** `start.sh` hard-codes the venv path for the current deployment. Edit it or use your own activation for other environments. Use `SLACATHON_ACTIVE_TASK` (or set it in `.env`) to switch challenge logic (see `tasks/`). All configuration uses the `SLACATHON_` prefix.
-
-## Project Structure
-
-```
-backend/
-├── main.py                 # FastAPI app (root_path=/slacathon26)
-├── settings.py             # Centralized config via SLACATHON_* env vars + .env (pydantic-settings)
-├── job_manager.py          # Job persistence (ndjson), quotas, validation counts, make_json_safe
-├── middleware.py           # API key auth, per-user history tracker, leaderboard logic
-├── task_loader.py          # Loads active task from tasks/ dir (enforces Task protocol)
-├── tasks/
-│   ├── base.py             # TaskInput, TaskResult, Task protocol (TARGET, MINIMIZE, FAILURE_SCORE, ...)
-│   ├── flat_beam.py        # Default task (RTFB round-to-flat beam optimization)
-│   ├── fort.1              # Physics data file (for flat beam task)
-│   └── __init__.py
-├── GPOptimizer.py          # Gaussian Process optimizer client example (sklearn)
-├── XoptOptimizer.py        # Xopt-based Bayesian optimizer client example
-├── optimize_usage.py       # GP optimization script example (with input patching)
-├── optimize_xopt_usage.py  # Xopt optimization script example (with input patching)
-├── usage.py                # Simple validation client example
-├── start.sh                # Launcher (activates venv + gunicorn, respects SLACATHON_*)
-├── .env.example
-├── index.html              # Landing / hero page
-├── leaderboard.html        # Leaderboard UI (dynamic labels + target via /task)
-├── team.html
-├── .gitignore
-└── README.md
-```
-
-**Key changes to project structure:**
-- `models.py` and `logic.py` removed (dead code cleaned)
-- New `settings.py` (pydantic-settings with `SLACATHON_` prefix) + `.env.example`
-- `task_loader.py` + `tasks/` package for pluggable challenges (tasks declare TARGET, MINIMIZE, MAX_VALIDATIONS_PER_USER, etc.)
-- `job_manager.py` extracted (jobs + quota logic moved out of middleware)
-- Score is the raw optimization value from the task; TARGET + MINIMIZE only determine "solved"
-- All static HTML served from root
-- No top-level `app/` directory (flat `backend/` layout)
-
-## Development
-
-```bash
-# Recommended: use the provided start.sh (or manually)
-source venv/bin/activate
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Configuration is read from `.env` or environment variables with the `SLACATHON_` prefix.
-```
-
-To see the currently loaded task configuration:
-```bash
-curl http://localhost:8888/task
-```
-
-## Production
-
-Use the included launcher (recommended):
-
-```bash
-./start.sh
-```
-
-It activates the venv and runs:
-```bash
-gunicorn -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 \
-  --bind 127.0.0.1:8888 main:app
-```
-
-To switch tasks (pluggable system):
-
-```bash
-export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see tasks/ dir)
-./start.sh
-```
-
-Or set it in `.env`:
-```env
-SLACATHON_ACTIVE_TASK=flat_beam
-```
-
-`GET /task` returns the current task's input schema, parameter labels, bounds, **target**, **minimize** direction, `failure_score`, and `max_validations_per_user`. Tasks define these values.
-
-## Accessing the Application
-
-The app is mounted under `/slacathon26` (FastAPI `root_path`).
-
-- **Landing Page:** `https://your-domain.com/slacathon26/`
-- **Leaderboard:** `https://your-domain.com/slacathon26/board`
-- **Team Page:** `https://your-domain.com/slacathon26/team`
-- **Task Info:** `GET https://your-domain.com/slacathon26/task` (schema + target/minimize/quotas)
-- **Validate (async job):** `POST https://your-domain.com/slacathon26/validate` (returns `job_id` + `quota`)
-- **Job result:** `GET /jobs/{job_id}` (includes `quota`)
-- **Submit to leaderboard:** `POST https://your-domain.com/slacathon26/submit`
-- **History / Leaderboard:** `GET /history`, `GET /leaderboard`
-
-Use `X-API-Key` header for protected endpoints. Quota limits (`MAX_VALIDATIONS_PER_USER`) and scoring rules come from the active task.
-
-## Features
-
-- 🚀 FastAPI + Gunicorn
-- 🔐 API key authentication + per-user quotas
-- 🔌 Pluggable tasks (`tasks/*.py` + `SLACATHON_ACTIVE_TASK`)
-- 📊 Dynamic input schema (`GET /task`)
-- 📈 Job-based validation + full history
-- 🏆 Leaderboard with duplicate detection
-- 🧪 Example optimizer clients: GPOptimizer.py (sklearn GP) and XoptOptimizer.py (Xopt package)
 
 ## License
 
 Stanford License
-
-## Contributing
-
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
-
-## Support
-
-For questions or issues, please open an issue on GitHub or contact the team.

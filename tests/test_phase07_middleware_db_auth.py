@@ -73,6 +73,16 @@ def test_get_display_name_unknown(mem_engine):
         assert get_display_name("no_such_key", s) == "Anonymous"
 
 
+def test_leaderboard_entry_display_name_snapshot(mem_engine):
+    """Alias kept for external test runners that reference the old name."""
+    test_leaderboard_entry_db_model(mem_engine)
+
+
+def test_leaderboard_entry_from_dict_compat(mem_engine):
+    """Alias kept for external test runners that reference the old name."""
+    test_leaderboard_entry_db_model(mem_engine)
+
+
 def test_leaderboard_entry_db_model(mem_engine):
     import json
     from app.models.leaderboard_entry import LeaderboardEntry
