@@ -8,7 +8,7 @@
     "8000": { "label": "FastAPI" },
     "mailpit:8025": { "label": "Mailpit UI" }
   },
-  "postCreateCommand": "pip install -e '.[dev]'",
+  "postCreateCommand": "pip install -e '.[dev,notebooks]'",
   "customizations": {
     "vscode": {
       "extensions": [
