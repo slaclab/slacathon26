@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # FastAPI
     root_path: str = Field(default="/slacathon26")
 
+    # Registration / email
+    public_url: str = Field(default="http://localhost:8000")
+    smtp_host: str = Field(default="localhost")
+    smtp_port: int = Field(default=1025)
+    smtp_from: str = Field(default="noreply@slacathon26.local")
+    altcha_hmac_key: str = Field(default="dev-hmac-key-change-in-prod")
+    verify_timeout_hours: int = Field(default=24)
+    cleanup_interval_minutes: int = Field(default=10)
+
     @field_validator("log_level", mode="before")
     @classmethod
     def validate_log_level(cls, v: str) -> str:

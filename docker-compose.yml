@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    # ports:
+    #   - "8000:8000"
+    volumes:
+      - .:/workspaces/slacathon26
+    environment:
+      - SLACATHON_SMTP_HOST=mailpit
+      - SLACATHON_SMTP_PORT=1025
+      - SLACATHON_PUBLIC_URL=http://localhost:8000
+    depends_on:
+      - mailpit
+    working_dir: /workspaces/slacathon26
+    command: sleep infinity
+
+  mailpit:
+    image: axllent/mailpit:latest
+    # ports:
+    #   - "1025:1025"
+    #   - "8025:8025"
+    restart: unless-stopped

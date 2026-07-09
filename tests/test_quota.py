@@ -1,8 +1,5 @@
 """Minimal smoke test for quota logic (import + basic)."""
 
-import sys
-sys.path.insert(0, "src")
-
 def test_quota_imports():
     from slacathon import job_manager
     from slacathon.settings import settings

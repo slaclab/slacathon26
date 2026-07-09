@@ -1,10 +1,23 @@
-from fastapi import FastAPI, HTTPException, Depends, Body
+import asyncio
+import logging
+import secrets
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Depends, Body, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, EmailStr
+
+from .captcha import create_challenge, verify_captcha
+from .email_service import send_verification_email, send_api_key_email
 from .task_loader import load_active_task
 from .middleware import (
-    verify_api_key, 
-    get_tracker, 
-    UserSubmissionTracker, 
+    verify_api_key,
+    get_tracker,
+    UserSubmissionTracker,
     add_to_leaderboard,
     get_leaderboard,
     get_display_name,
@@ -17,16 +30,35 @@ from .job_manager import (
     charge_validation_quota,
     get_quota_info,
 )
-import asyncio
-import logging
-import time
-
 from .settings import settings
-from pathlib import Path
+from . import db as _db
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(root_path=settings.root_path)
+_WEB_ROOT = Path(__file__).resolve().parents[2] / "web"
+_templates = Jinja2Templates(directory=str(_WEB_ROOT / "page_templates"))
+
+
+async def _cleanup_loop():
+    while True:
+        await asyncio.sleep(settings.cleanup_interval_minutes * 60)
+        try:
+            n = _db.delete_expired_unverified_users()
+            if n:
+                logger.info(f"Cleanup: removed {n} expired unverified user(s)")
+        except Exception:
+            logger.exception("Cleanup loop error")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_cleanup_loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(root_path=settings.root_path, lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(_WEB_ROOT / "static")), name="static")
 
 TASK = load_active_task()
 logger.info(f"Loaded task: {getattr(TASK, 'TASK_NAME', 'Unknown')}")
@@ -35,6 +67,134 @@ landing_page_html = (Path(__file__).resolve().parent.parent.parent / "web/index.
 leaderboard_page_html = (Path(__file__).resolve().parent.parent.parent / "web/leaderboard.html").read_text()
 team_page_html = (Path(__file__).resolve().parent.parent.parent / "web/team.html").read_text()
 
+
+# ---------------------------------------------------------------------------
+# Registration models
+# ---------------------------------------------------------------------------
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    display_name: str
+    altcha_payload: str
+
+
+class VerifyRequest(BaseModel):
+    token: str
+    altcha_payload: str
+
+
+class ResendKeyRequest(BaseModel):
+    email: EmailStr
+    altcha_payload: str
+
+
+# ---------------------------------------------------------------------------
+# Registration endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/captcha-challenge")
+async def captcha_challenge():
+    return create_challenge()
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    return _templates.TemplateResponse(
+        request, "register.html.j2",
+        {"root_path": settings.root_path},
+    )
+
+
+@app.post("/register", status_code=202)
+async def register(body: RegisterRequest):
+    verify_captcha(body.altcha_payload)
+
+    existing = _db.get_user_by_email(body.email)
+    if existing:
+        if existing.get("verified"):
+            raise HTTPException(status_code=409, detail="Email already registered")
+        _db.delete_user_by_id(existing["api_key"])
+
+    verify_token = secrets.token_urlsafe(32)
+    expires_at = time.time() + settings.verify_timeout_hours * 3600
+    row_id = _db.create_unverified_user(body.email, body.display_name, verify_token, expires_at)
+
+    verify_url = f"{settings.public_url}{settings.root_path}/verify?token={verify_token}"
+    try:
+        await send_verification_email(body.email, verify_url, settings.verify_timeout_hours)
+    except Exception:
+        logger.exception("Failed to send verification email for %s", body.email)
+        _db.delete_user_by_id(row_id)
+        raise HTTPException(status_code=503, detail="Email service unavailable. Please try again in a moment.")
+
+    logger.info("Registration initiated for %s", body.email)
+    return {"detail": "Check your email — verification link sent"}
+
+
+@app.get("/verify", response_class=HTMLResponse)
+async def verify_page(request: Request, token: str = ""):
+    if not token:
+        return _templates.TemplateResponse(
+            request, "verify.html.j2",
+            {"token": "", "root_path": settings.root_path, "error": "Missing verification token"},
+        )
+    return _templates.TemplateResponse(
+        request, "verify.html.j2",
+        {"token": token, "root_path": settings.root_path, "error": None},
+    )
+
+
+@app.post("/verify")
+async def verify_email(body: VerifyRequest):
+    verify_captcha(body.altcha_payload)
+
+    user = _db.get_user_by_token(body.token)
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid or expired link")
+
+    if user.get("expires_at") and user["expires_at"] < time.time():
+        _db.delete_user_by_id(user["api_key"])
+        raise HTTPException(status_code=410, detail="Link expired — please register again")
+
+    api_key = secrets.token_urlsafe(32)
+    _db.mark_user_verified(user["api_key"], api_key)
+
+    await send_api_key_email(user["email"], api_key)
+    logger.info("Email verified for %s", user["email"])
+
+    return RedirectResponse(url=f"{settings.root_path}/registered", status_code=303)
+
+
+@app.get("/registered", response_class=HTMLResponse)
+async def registered_page(request: Request):
+    return _templates.TemplateResponse(
+        request, "registered.html.j2",
+        {"root_path": settings.root_path},
+    )
+
+
+@app.get("/resend-key", response_class=HTMLResponse)
+async def resend_key_page(request: Request):
+    return _templates.TemplateResponse(
+        request, "resend_key.html.j2",
+        {"root_path": settings.root_path},
+    )
+
+
+@app.post("/resend-key", status_code=200)
+async def resend_key(body: ResendKeyRequest):
+    verify_captcha(body.altcha_payload)
+    user = _db.get_user_by_email(body.email)
+    if not user or not user.get("verified"):
+        raise HTTPException(status_code=404, detail="No verified account found for that email")
+    await send_api_key_email(user["email"], user["api_key"])
+    logger.info("API key resent for %s", user["email"])
+    return {"detail": "API key sent — check your inbox"}
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
 
 def _extract_input_data(body: dict) -> dict:
     """Shared helper to extract input from either {"input": <obj>} or flat object.

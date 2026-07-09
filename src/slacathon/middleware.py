@@ -8,7 +8,7 @@ import os
 import threading
 
 from .settings import settings
-from .db import init_db, load_users, get_valid_api_keys as db_get_valid_api_keys, upsert_user
+from .db import load_users, get_valid_api_keys as db_get_valid_api_keys
 
 from .task_loader import load_active_task
 # Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
@@ -26,43 +26,9 @@ LEADERBOARD_FILE = settings.leaderboard_file
 
 leaderboard_lock = threading.RLock()
 
-def _load_valid_api_keys() -> set:
-    init_db()
-    keys = set()
-    if settings.api_keys:
-        keys = set(settings.api_keys)
-        logger.info(f"Loaded {len(keys)} API key(s) from settings")
-
-    db_keys = db_get_valid_api_keys()
-    if db_keys:
-        keys |= db_keys
-        logger.info(f"Loaded {len(db_keys)} API key(s) from database")
-
-    if not keys:
-        logger.warning(
-            "No API keys configured in settings. Using hardcoded development keys. "
-            "This is insecure — set SLACATHON_API_KEYS in your environment."
-        )
-        keys = {"key_123", "key_456", "key_789"}
-    return keys
-
-
-VALID_API_KEYS = _load_valid_api_keys()
-
-
-def load_user_names() -> Dict[str, str]:
-    """Load user names from the database (post-migration)."""
-    init_db()
-    names = load_users() or {}
-    if names:
-        logger.info(f"Loaded {len(names)} user names from database")
-    return names
-
-
-user_names = load_user_names()
 
 def get_display_name(api_key: str) -> str:
-    return user_names.get(api_key, "Anonymous")
+    return load_users().get(api_key, "Anonymous")
 
 class LeaderboardEntry:
     def __init__(self, user_id: str, input: dict, score: float, solved: bool, timestamp: float):
@@ -196,7 +162,14 @@ def get_leaderboard() -> List[dict]:
         return [entry.to_dict() for entry in leaderboard]
 
 async def verify_api_key(x_api_key: str = Header(...)) -> str:
-    if x_api_key not in VALID_API_KEYS:
+    valid = db_get_valid_api_keys() | set(settings.api_keys)
+    if not valid:
+        logger.warning(
+            "No API keys configured in settings. Using hardcoded development keys. "
+            "This is insecure — set SLACATHON_API_KEYS in your environment."
+        )
+        valid = {"key_123", "key_456", "key_789"}
+    if x_api_key not in valid:
         logger.warning("Invalid API key attempted")
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key

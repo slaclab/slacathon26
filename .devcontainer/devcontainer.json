@@ -1,0 +1,28 @@
+{
+  "name": "SLACATHON 26 Dev",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/slacathon26",
+  "forwardPorts": [8000, "mailpit:8025"],
+  "portsAttributes": {
+    "8000": { "label": "FastAPI" },
+    "mailpit:8025": { "label": "Mailpit UI" }
+  },
+  "postCreateCommand": "pip install -e '.[dev]'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylance",
+        "ms-python.debugpy"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.terminal.activateEnvironment": false,
+        "python.testing.pytestEnabled": true,
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestArgs": ["tests"]
+      }
+    }
+  }
+}
