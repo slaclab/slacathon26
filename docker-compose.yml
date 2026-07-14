@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    # ports:
-    #   - "8000:8000"
+    ports:
+      - "2222:2222"
     volumes:
       - .:/workspaces/slacathon26
     environment:
