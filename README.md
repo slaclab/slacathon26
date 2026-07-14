@@ -32,43 +32,57 @@ See the live site and optimizer clients (in clients/) for usage examples.
 - Claude Code
 - Grok Build
 
-## Installation
+## Development (Devcontainer — recommended)
+
+The repo ships a VS Code devcontainer that starts the app and a local mail server (Mailpit) together.
+
+### Prerequisites
+- Docker Desktop
+- VS Code with the **Dev Containers** extension
+
+### Start
+
+1. Open the repo folder in VS Code.
+2. When prompted, click **Reopen in Container** (or run `Dev Containers: Rebuild and Reopen in Container`).
+3. VS Code builds the image, starts `app` + `mailpit` via `docker-compose.yml`, and drops you into the container.
+4. Press **F5** (or Run → **Run: FastAPI dev**) to start uvicorn with `--reload`.
+5. App: `http://localhost:8000/slacathon26/`  
+   Mailpit UI (inspect outgoing emails): `http://localhost:8025`
+
+Environment is configured automatically inside the container — `SLACATHON_SMTP_HOST=mailpit`, port 1025.
+
+## Installation (local, no Docker)
 
 ### 1. Clone
 ```bash
 git clone https://github.com/balticfish/slacathon26.git
-cd slacathon26   # this is SLACathon v0.1 (Tabby)
+cd slacathon26
 ```
 
-### 2. Virtualenv
+### 2. Install
 ```bash
 python -m venv venv
 source venv/bin/activate
-pip install numpy scipy fastapi uvicorn gunicorn
+pip install -e .
 ```
 
 ### 3. Configuration
 ```bash
 cp .env.example .env
-# Edit .env and set at minimum:
-#   SLACATHON_API_KEYS=your_strong_key_1,your_strong_key_2
-#   SLACATHON_ACTIVE_TASK=flat_beam
+# Edit .env — required for self-registration:
+#   SLACATHON_PUBLIC_URL=https://your-domain.com
+#   SLACATHON_SMTP_HOST=your-smtp-host
+#   SLACATHON_SMTP_PORT=587
+#   SLACATHON_SMTP_FROM=noreply@your-domain.com
+#   SLACATHON_ALTCHA_HMAC_KEY=<random secret>
 ```
 
-All settings use the `SLACATHON_` prefix (see `.env.example` for full list: keys, host/port, files, limits, root_path, etc.).
+All settings use the `SLACATHON_` prefix (see `.env.example` for the full list).
 
 ### 4. Run
 ```bash
-./scripts/start.sh
-```
-
-Or for development:
-```bash
-source venv/bin/activate
 PYTHONPATH=src uvicorn slacathon.main:app --reload
 ```
-
-**Note:** `scripts/start.sh` is relocatable (derives ROOT, sets PYTHONPATH, cds to root, sources .env from root). Use `SLACATHON_ACTIVE_TASK` (or set it in `.env`) to switch challenge logic (see `src/slacathon/tasks/`). All configuration uses the `SLACATHON_` prefix.
 
 ## Project Structure
 
@@ -82,9 +96,12 @@ SLACathon-v0.1-Tabby/
 ├── src/
 │   └── slacathon/
 │       ├── __init__.py
-│       ├── main.py
+│       ├── main.py           # routes (API + registration)
 │       ├── settings.py
 │       ├── middleware.py
+│       ├── db.py             # SQLite helpers
+│       ├── captcha.py        # Altcha PoW CAPTCHA
+│       ├── email_service.py  # async SMTP
 │       ├── job_manager.py
 │       ├── task_loader.py
 │       └── tasks/
@@ -109,7 +126,11 @@ SLACathon-v0.1-Tabby/
 ├── web/
 │   ├── index.html
 │   ├── leaderboard.html
-│   └── team.html
+│   ├── team.html
+│   ├── static/
+│   │   └── altcha.min.js
+│   ├── page_templates/       # Jinja2 templates (registration UI)
+│   └── email_templates/      # Jinja2 templates (verification + API key emails)
 │
 ├── scripts/
 │   └── start.sh
@@ -135,20 +156,50 @@ SLACathon-v0.1-Tabby/
 - `fort.1` moved to data subdir under tasks, loaded via importlib.resources
 - Structure now uses src/ layout for the SLACathon package
 
+## User Registration
+
+Participants self-register via the web UI — no admin key seeding required.
+
+### Flow
+
+1. Visit `/slacathon26/register` → fill in email + display name + CAPTCHA → submit.
+2. Receive a verification email with a one-time link (expires in `SLACATHON_VERIFY_TIMEOUT_HOURS`, default 24 h).
+3. Click the link → solve CAPTCHA → email verified.
+4. Receive a second email containing your API key.
+5. Use the key as `X-API-Key: <key>` on all protected endpoints.
+
+Lost your key? Visit `/slacathon26/resend-key` to have it resent.
+
+### Registration endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /register` | Registration form |
+| `POST /register` | Submit email + display name |
+| `GET /verify?token=…` | Email verification form |
+| `POST /verify` | Verify token → receive API key |
+| `GET /registered` | Confirmation page |
+| `GET /resend-key` | API key resend form |
+| `POST /resend-key` | Resend API key to verified address |
+| `GET /captcha-challenge` | CAPTCHA challenge (Altcha PoW) |
+
+### Required settings for email delivery
+
+```env
+SLACATHON_PUBLIC_URL=https://your-domain.com     # base URL for verification links
+SLACATHON_SMTP_HOST=your-smtp-host
+SLACATHON_SMTP_PORT=587
+SLACATHON_SMTP_FROM=noreply@your-domain.com
+SLACATHON_ALTCHA_HMAC_KEY=<random secret>        # CAPTCHA signing key
+```
+
+In the devcontainer these are pre-configured to use the bundled Mailpit service.
+
 ## Development
-
-```bash
-# Recommended: use the provided scripts/start.sh (or manually)
-source venv/bin/activate
-PYTHONPATH=src uvicorn slacathon.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Configuration is read from `.env` or environment variables with the `SLACATHON_` prefix.
-```
 
 To see the currently loaded task configuration:
 ```bash
-curl http://localhost:8888/task
+curl http://localhost:8000/slacathon26/task
 ```
 
 ### Storage & Migration
@@ -199,6 +250,8 @@ SLACATHON_ACTIVE_TASK=flat_beam
 The app is mounted under `/slacathon26` (FastAPI `root_path`).
 
 - **Landing Page:** `https://your-domain.com/slacathon26/`
+- **Register:** `https://your-domain.com/slacathon26/register`
+- **Get API Key:** `https://your-domain.com/slacathon26/resend-key`
 - **Leaderboard:** `https://your-domain.com/slacathon26/board`
 - **Team Page:** `https://your-domain.com/slacathon26/team`
 - **Task Info:** `GET https://your-domain.com/slacathon26/task` (schema + target/minimize/quotas)
@@ -207,17 +260,19 @@ The app is mounted under `/slacathon26` (FastAPI `root_path`).
 - **Submit to leaderboard:** `POST https://your-domain.com/slacathon26/submit`
 - **History / Leaderboard:** `GET /history`, `GET /leaderboard`
 
-Use `X-API-Key` header for protected endpoints. Quota limits (`MAX_VALIDATIONS_PER_USER`) and scoring rules come from the active task.
+Use `X-API-Key` header for protected endpoints. API keys are issued after email verification via the registration flow. Quota limits (`MAX_VALIDATIONS_PER_USER`) and scoring rules come from the active task.
 
 ## Features
 
 - 🚀 FastAPI + Gunicorn
+- 📝 Self-serve user registration with email verification + Altcha CAPTCHA
 - 🔐 API key authentication + per-user quotas
 - 🔌 Pluggable tasks (`src/slacathon/tasks/*.py` + `SLACATHON_ACTIVE_TASK`)
 - 📊 Dynamic input schema (`GET /task`)
 - 📈 Job-based validation + full history
 - 🏆 Leaderboard with duplicate detection
 - 🧪 Example optimizer clients: clients/gp_optimizer.py and clients/xopt_optimizer.py
+- 🐳 VS Code devcontainer with Mailpit for local email testing
 ```
 
 ## License

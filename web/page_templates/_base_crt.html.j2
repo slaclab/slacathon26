@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SLACATHON 2026 :: {% block title %}{% endblock %}</title>
+  {% block head_extra %}{% endblock %}
+  <style>
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Courier New', monospace;
+      color: #00ff00; background: #000000;
+      min-height: 100vh; overflow-x: hidden; position: relative;
+    }
+    body::after {
+      content: '';
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: repeating-linear-gradient(
+        to bottom, transparent 0px, transparent 2px,
+        rgba(0,255,0,0.035) 2px, rgba(0,255,0,0.035) 3px
+      );
+      background-size: 100% 4px;
+      animation: scan 1.6s linear infinite;
+      z-index: -1; pointer-events: none;
+    }
+    @keyframes scan { 0% { background-position: 0 0; } 100% { background-position: 0 4px; } }
+    .container {
+      max-width: 520px; margin: 60px auto; padding: 32px 36px;
+      background: #000; border: 2px solid #00ff00;
+      box-shadow: 0 0 18px rgba(0,255,0,0.45), inset 0 0 18px rgba(0,255,0,0.06);
+    }
+    .title {
+      font-size: 1.3em; letter-spacing: 3px; color: #00ff00;
+      text-shadow: 0 0 8px #00ff00, 0 0 16px #00cc88; margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 0.82em; color: #00aaff; letter-spacing: 1.4px;
+      text-shadow: 0 0 4px #00aaff; margin-bottom: 28px;
+    }
+    label { display: block; font-size: 0.78em; color: #00cc88; letter-spacing: 1px; margin-bottom: 4px; }
+    input[type="email"], input[type="text"] {
+      width: 100%; box-sizing: border-box;
+      background: #000; border: 1px solid #00aa00;
+      color: #00ff00; font-family: 'Courier New', monospace;
+      font-size: 0.95em; padding: 8px 10px; margin-bottom: 20px; outline: none;
+    }
+    input:focus { border-color: #00ff00; box-shadow: 0 0 6px rgba(0,255,0,0.4); }
+    button[type="submit"] {
+      width: 100%; padding: 10px;
+      background: transparent; border: 1px solid #00ff00;
+      color: #00ff00; font-family: 'Courier New', monospace;
+      font-size: 0.9em; letter-spacing: 2px; cursor: pointer;
+      transition: all 0.2s; margin-top: 18px;
+    }
+    button:hover { background: rgba(0,255,0,0.08); box-shadow: 0 0 10px rgba(0,255,0,0.4); }
+    .msg { font-size: 0.82em; margin-top: 16px; }
+    .msg.error { color: #ff4444; text-shadow: 0 0 4px #ff4444; }
+    .msg.ok    { color: #00ffcc; text-shadow: 0 0 4px #00ffcc; }
+    a.back { display: inline-block; margin-bottom: 20px; color: #00aaff; text-decoration: none;
+             text-shadow: 0 0 4px #00aaff; font-size: 0.82em; }
+    a.back:hover { color: #00ffff; }
+    .instructions { font-size: 0.84em; color: #88bb88; margin-bottom: 22px; line-height: 1.5; }
+    altcha-widget { display: block; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

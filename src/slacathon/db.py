@@ -49,7 +49,11 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS users (
                     api_key TEXT PRIMARY KEY,
                     display_name TEXT NOT NULL,
-                    created_at REAL DEFAULT (strftime('%s','now'))
+                    created_at REAL DEFAULT (strftime('%s','now')),
+                    email TEXT UNIQUE,
+                    verified INTEGER DEFAULT 0,
+                    verify_token TEXT UNIQUE,
+                    expires_at REAL
                 );
 
                 CREATE TABLE IF NOT EXISTS jobs (
@@ -74,6 +78,18 @@ def init_db() -> None:
                 CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id);
                 CREATE INDEX IF NOT EXISTS idx_quota_user ON quota_charges(user_id);
             """)
+
+            # Idempotent column additions for existing DBs
+            for alter in [
+                "ALTER TABLE users ADD COLUMN email TEXT UNIQUE",
+                "ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0",
+                "ALTER TABLE users ADD COLUMN verify_token TEXT UNIQUE",
+                "ALTER TABLE users ADD COLUMN expires_at REAL",
+            ]:
+                try:
+                    conn.execute(alter)
+                except Exception:
+                    pass  # column already exists
 
             conn.commit()
             logger.info(f"Database initialized at {DB_PATH}")
@@ -104,37 +120,142 @@ def _json_loads(s: str | None) -> Any:
 # -----------------------
 
 def load_users() -> dict[str, str]:
-    """Return {api_key: display_name}."""
+    """Return {api_key: display_name} for verified users."""
     with _lock:
         conn = _connect()
         try:
-            rows = conn.execute("SELECT api_key, display_name FROM users").fetchall()
+            rows = conn.execute(
+                "SELECT api_key, display_name FROM users WHERE verified = 1"
+            ).fetchall()
             return {r["api_key"]: r["display_name"] for r in rows}
         finally:
             conn.close()
 
 
 def get_valid_api_keys() -> set[str]:
-    """Return the set of valid API keys from the users table."""
+    """Return verified API keys only."""
     with _lock:
         conn = _connect()
         try:
-            rows = conn.execute("SELECT api_key FROM users").fetchall()
+            rows = conn.execute(
+                "SELECT api_key FROM users WHERE verified = 1"
+            ).fetchall()
             return {r["api_key"] for r in rows}
         finally:
             conn.close()
 
 
 def upsert_user(api_key: str, display_name: str) -> None:
-    """Insert or update a user (for future admin tools or migration)."""
+    """Insert or update a user (for admin tools or migration). Skips verified users."""
     with _lock:
         conn = _connect()
         try:
             conn.execute(
-                "INSERT OR REPLACE INTO users (api_key, display_name) VALUES (?, ?)",
+                """
+                INSERT INTO users (api_key, display_name, verified) VALUES (?, ?, 1)
+                ON CONFLICT(api_key) DO UPDATE SET display_name=excluded.display_name
+                WHERE verified = 0 OR verified IS NULL
+                """,
                 (api_key, display_name)
             )
             conn.commit()
+        finally:
+            conn.close()
+
+
+# -----------------------
+# Registration helpers
+# -----------------------
+
+def create_unverified_user(
+    email: str,
+    display_name: str,
+    verify_token: str,
+    expires_at: float,
+) -> str:
+    """Create a new unverified user row. Returns the row id (display_name used as placeholder api_key)."""
+    import secrets as _secrets
+    row_id = _secrets.token_urlsafe(16)
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute(
+                """
+                INSERT INTO users (api_key, display_name, email, verified, verify_token, expires_at)
+                VALUES (?, ?, ?, 0, ?, ?)
+                """,
+                (row_id, display_name.strip()[:40], email.lower(), verify_token, expires_at),
+            )
+            conn.commit()
+            return row_id
+        finally:
+            conn.close()
+
+
+def get_user_by_email(email: str) -> dict | None:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM users WHERE email = ?", (email.lower(),)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+def get_user_by_token(token: str) -> dict | None:
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT * FROM users WHERE verify_token = ?", (token,)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+
+
+def mark_user_verified(row_id: str, api_key: str) -> None:
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute(
+                """
+                UPDATE users
+                SET api_key = ?, verified = 1, expires_at = NULL, verify_token = NULL
+                WHERE api_key = ?
+                """,
+                (api_key, row_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def delete_user_by_id(row_id: str) -> None:
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute("DELETE FROM users WHERE api_key = ?", (row_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def delete_expired_unverified_users() -> int:
+    """Delete unverified users whose token has expired. Returns count deleted."""
+    import time as _time
+    now = _time.time()
+    with _lock:
+        conn = _connect()
+        try:
+            cur = conn.execute(
+                "DELETE FROM users WHERE verified = 0 AND expires_at IS NOT NULL AND expires_at < ?",
+                (now,),
+            )
+            conn.commit()
+            return cur.rowcount
         finally:
             conn.close()
 

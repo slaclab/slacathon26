@@ -1,0 +1,26 @@
+{% extends "_base_crt.html.j2" %}
+
+{% block title %}REGISTRATION COMPLETE{% endblock %}
+
+{% block content %}
+  <div class="title">// EMAIL VERIFIED</div>
+  <div class="subtitle">SLACATHON 2026 — REGISTRATION COMPLETE</div>
+
+  <p class="instructions">
+    Your email has been confirmed.<br>
+    An API key has been dispatched to your inbox — check your email to retrieve it.
+  </p>
+
+  <p class="instructions">
+    Once you have your key, use it as a Bearer token or <code style="color:#00ffcc">X-API-Key</code> header
+    when submitting solutions.
+  </p>
+
+  <!-- DOCS: add further documentation here -->
+  <div style="border-top:1px solid #004400; margin-top:28px; padding-top:20px;">
+    <div style="font-size:0.78em; color:#004400; letter-spacing:1px; margin-bottom:8px;">// DOCUMENTATION</div>
+    <p style="font-size:0.82em; color:#336633; font-style:italic;">[ Documentation coming soon ]</p>
+  </div>
+
+  <a class="back" href="{{ root_path }}/">&lt; back to home</a>
+{% endblock %}
