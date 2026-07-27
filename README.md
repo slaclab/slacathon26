@@ -79,10 +79,81 @@ cp .env.example .env
 
 All settings use the `SLACATHON_` prefix (see `.env.example` for the full list).
 
-### 4. Run
+The defaults are already suitable for local development (SMTP `localhost:1025`,
+`SLACATHON_PUBLIC_URL=http://localhost:8000`), so a `.env` is optional for a quick dev test.
+
+### 4. Start a local mail catcher (required for registration)
+
+Registration sends a verification email and then an API-key email. With no SMTP
+server listening, `POST /register` fails with `503 Email service unavailable`.
+For local testing, run **Mailpit** to capture those emails and inspect them in a web UI.
+
+Using Docker (no install required):
 ```bash
-PYTHONPATH=src uvicorn slacathon.main:app --reload
+docker run -d --name slacathon-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit:latest
 ```
+- SMTP: `localhost:1025` (matches the default `SLACATHON_SMTP_*` settings)
+- Inbox UI: `http://localhost:8025` — open verification links and read your API key here
+
+Stop/remove it when done: `docker rm -f slacathon-mailpit`.
+
+### 5. Run
+
+Run on port 8000 so verification links (built from `SLACATHON_PUBLIC_URL`) resolve correctly:
+```bash
+PYTHONPATH=src uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+This starts the default `flat_beam` task. To run a different task, set `SLACATHON_ACTIVE_TASK`
+(see `src/slacathon/tasks/` for available modules: `flat_beam`, `fel`, `cuinj`).
+
+**Run the dev server with the FEL task:**
+```bash
+SLACATHON_ACTIVE_TASK=fel PYTHONPATH=src \
+  uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
+```
+Or persist it in `.env`: `SLACATHON_ACTIVE_TASK=fel`, then run the plain command above.
+
+Confirm the active task: `curl -s http://localhost:8000/slacathon26/task` → `"name": "FEL Pulse Intensity"`.
+
+> **Note — `fel` and `cuinj` call a live SLAC model service.** Each `/validate` and `/submit`
+> posts to `https://ard-modeling-service.slac.stanford.edu/{fel,cuinj}/predict`, so these tasks
+> need network access to that host (SLAC network / VPN). If it's unreachable, submissions return
+> a service-error result with score `1e10` instead of failing the request. Override the endpoint
+> with `FEL_URL=...` / `CUINJ_URL=...` if needed. The default `flat_beam` task runs fully locally.
+
+### 6. Test the flow
+
+1. Open `http://localhost:8000/slacathon26/register`, submit email + display name + CAPTCHA.
+2. Open Mailpit at `http://localhost:8025`, click the verification link in the email.
+3. Solve the CAPTCHA to verify — a second email delivers your API key.
+4. Use the key as `X-API-Key: <key>` for `POST /submit`, then view `http://localhost:8000/slacathon26/board`.
+
+### 7. Run a Test Submission
+
+1. Put the API key in the client (edit clients/optimize_fel.py:17):
+`API_KEY = "<your key from the email>"`
+2. Run it (from the `clients/` dir):
+```
+cd clients && python optimize_fel.py
+```
+It runs 50 GP iterations against `/validate`, then `submit_best_to_leaderboard` posts to `/submit`. View results at http://localhost:8000/slacathon26/board.
+
+### 8. Spin down
+
+```bash
+# Stop the app (backgrounded uvicorn)
+pkill -f "uvicorn slacathon.main:app"
+
+# Stop + remove the mail catcher
+docker rm -f slacathon-mailpit
+```
+
+Optional — reset local test data (users, jobs, leaderboard) for a clean slate:
+```bash
+rm -f data/slacathon.db data/leaderboard.json
+```
+Both are gitignored runtime files and are recreated on next startup.
 
 ## Project Structure
 
@@ -107,7 +178,9 @@ SLACathon-v0.1-Tabby/
 │       └── tasks/
 │           ├── __init__.py
 │           ├── base.py
-│           ├── flat_beam.py
+│           ├── flat_beam.py     # default task (fully local)
+│           ├── fel.py           # FEL pulse intensity (calls SLAC model service)
+│           ├── cuinj.py         # injector emittance (calls SLAC model service)
 │           └── data/
 │               └── fort.1
 │
