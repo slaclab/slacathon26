@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slacathon26-config
+  namespace: slacathon26
+data:
+  SLACATHON_ACTIVE_TASK: flat_beam
+  SLACATHON_ROOT_PATH: /slacathon26
+  SLACATHON_DB_FILE: /app/data/slacathon.db
+  SLACATHON_LEADERBOARD_FILE: /app/data/leaderboard.json
+  SLACATHON_SMTP_PORT: "587"
+  SLACATHON_LOG_LEVEL: info

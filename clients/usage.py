@@ -1,7 +1,7 @@
 import requests
 import time
 
-API_KEY = "key_123"
+API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
 BASE_URL = "https://halavanau.group/slacathon26"
 
 headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}

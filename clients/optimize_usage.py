@@ -1,7 +1,7 @@
 import numpy as np
 from gp_optimizer import GPOptimizer
 
-API_KEY = "key_123"
+API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
 BASE_URL = "https://halavanau.group/slacathon26"
 
 FIXED_VALUES = [1.0, 1.4]
