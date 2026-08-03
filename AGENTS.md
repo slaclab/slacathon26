@@ -92,7 +92,9 @@ Kustomize validation and should never commit Vault secret values.
 Store runtime secrets only in Vault using the `ricoberger.de/v1alpha1`
 `VaultSecret` resources. Use separate dev and prod Vault paths and keep the
 Kubernetes Secret name `application-secrets`. Deploy immutable seven-character
-image tags through `.github/workflows/deploy.yml`; `latest` is only a fallback
-alias. Production promotion requires the protected GitHub `production`
-Environment approval. Argo CD watches `kubernetes/overlays/dev` and
+image tags through `.github/workflows/deploy-dev.yml` and
+`.github/workflows/promote-production.yml`; `latest` is only a fallback alias.
+Deployment workflows create pull requests and do not push directly to `main`.
+Production promotion requires the protected GitHub `production` Environment
+approval. Argo CD watches `kubernetes/overlays/dev` and
 `kubernetes/overlays/prod` in their respective clusters.

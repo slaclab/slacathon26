@@ -26,34 +26,36 @@ See the live site and optimizer clients (in clients/) for usage examples.
 The repository contains a GitOps-ready Kubernetes base and two Kustomize
 overlays in [`kubernetes/`](kubernetes/):
 
-- `.github/workflows/release-deploy.yml` builds and publishes an image after an
-  application pull request is merged into `main`.
-- `.github/workflows/deploy.yml` is started manually from GitHub Actions with an
-  immutable image tag. It updates dev first, then pauses for approval through
-  the protected `production` Environment before updating prod.
+- `.github/workflows/release-build.yml` builds and publishes an image after an
+  application pull request is merged into `main`, or when started manually.
+- `.github/workflows/deploy-dev.yml` is started manually with an immutable image
+  tag and creates a pull request for the dev overlay.
+- `.github/workflows/promote-production.yml` verifies that the same image is in
+  the dev overlay, waits for approval through the protected `production`
+  Environment, and creates a production pull request.
 
 Both environments use the same base resources. Their overlay differences are
 the image reference and the Ingress hostname. The dev and prod overlays are
 intended to be reconciled by Argo CD applications in separate Kubernetes
 clusters.
 
-The release workflow publishes both
+The build workflow publishes both
 `ghcr.io/slaclab/slacathon26:<short-commit-sha>` and the convenience alias
-`ghcr.io/slaclab/slacathon26:latest`. The deploy workflow requires the immutable
-7-character commit-SHA tag; it never promotes `latest` or rebuilds an image for
-production.
+`ghcr.io/slaclab/slacathon26:latest`. Deployment workflows require the
+immutable 7-character commit-SHA tag; they never use `latest` or rebuild an
+image.
 
 Before the first sync:
 
 1. Set the `slacathon26` GHCR package visibility to **public**.
-2. Create a GitHub Environment named `dev`. The dev job in `deploy.yml` uses
+2. Create a GitHub Environment named `dev`. The `deploy-dev.yml` workflow uses
    this environment for deployment tracking; required reviewers are optional.
 3. Create a GitHub Environment named `production` and configure required
    reviewers. This is the approval gate between dev and production in
-   `deploy.yml`.
+   `promote-production.yml`.
 4. Configure a GitHub ruleset for `main` that requires pull requests for human
-   changes, but allows the GitHub Actions app to push deployment descriptor
-   commits. Enable workflow write permission for the repository's
+   and deployment changes. Allow the GitHub Actions app to create branches and
+   pull requests, and enable workflow write permission for the repository's
    `GITHUB_TOKEN`.
 5. Replace the example hosts in
    `kubernetes/overlays/dev/ingress-patch.yaml` and
@@ -78,12 +80,14 @@ Before the first sync:
    `kubernetes/overlays/prod` in the production cluster. Each cluster must
    provide a default StorageClass capable of a `1Gi` `ReadWriteOnce` claim.
 
-To deploy an image, open the `Deploy image` workflow in GitHub Actions, choose
-`Run workflow`, and enter the 7-character commit SHA published by the release
-workflow. The workflow commits the image to the dev overlay first. Once dev has
-been checked, an authorized reviewer approves the `production`
-Environment; the workflow then commits the same image SHA to the prod overlay.
-Argo CD reconciles each overlay in its respective cluster.
+To deploy an image, open `Deploy image to dev` in GitHub Actions, choose `Run
+workflow`, and enter the 7-character commit SHA published by the build workflow.
+The workflow verifies the image and opens a dev deployment pull request. Merge
+that PR to let Argo CD reconcile the dev overlay. After dev has been checked,
+start `Promote image to production` with the same image tag. The workflow
+verifies the dev overlay, waits for approval through the `production`
+Environment, and opens a production pull request. Merge that PR to let Argo CD
+reconcile the production overlay.
 
 The Deployment intentionally has one replica and uses a `Recreate` strategy:
 SQLite and the leaderboard file share a persistent volume and are not safe for

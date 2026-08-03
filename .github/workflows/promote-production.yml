@@ -1,0 +1,122 @@
+name: Promote image to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable image tag already deployed to dev
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: read
+  pull-requests: write
+
+concurrency:
+  group: slacathon26-production-promotion
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/slaclab/slacathon26
+
+jobs:
+  verify-dev:
+    name: Verify dev image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [[ ! "${IMAGE_TAG}" =~ ^[0-9a-f]{7}$ ]]; then
+            echo "image_tag must be exactly seven lowercase hexadecimal characters."
+            exit 1
+          fi
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Verify image exists
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: docker manifest inspect "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
+
+      - name: Verify dev overlay image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
+          kubectl kustomize kubernetes/overlays/dev >/dev/null
+
+  create-production-pr:
+    name: Create production deployment PR
+    needs: verify-dev
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - name: Check out latest main
+        # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Recheck dev image after approval
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
+
+      - name: Prepare production deployment branch
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          branch="deploy/prod-${IMAGE_TAG}"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            echo "Deployment branch ${branch} already exists. Close or merge its PR before retrying."
+            exit 1
+          fi
+          git switch --create "${branch}"
+          image="${IMAGE_NAME}:${IMAGE_TAG}"
+          sed -i "s|^          image: .*|          image: ${image}|" kubernetes/overlays/prod/deployment-patch.yaml
+          grep -F "          image: ${image}" kubernetes/overlays/prod/deployment-patch.yaml
+          kubectl kustomize kubernetes/overlays/prod >/dev/null
+
+      - name: Push production deployment branch
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kubernetes/overlays/prod/deployment-patch.yaml
+          git commit -m "chore(deploy): promote ${IMAGE_TAG} to production"
+          git push --set-upstream origin "deploy/prod-${IMAGE_TAG}"
+
+      - name: Create production deployment PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "deploy/prod-${IMAGE_TAG}" \
+            --title "chore(deploy): promote ${IMAGE_TAG} to production" \
+            --body "Image: ${IMAGE_NAME}:${IMAGE_TAG}
+
+Environment: production
+
+Kustomize path: kubernetes/overlays/prod
+
+Dev verification: the dev overlay references this exact image tag.
+
+Merge this PR to let Argo CD deploy the image to the production cluster."

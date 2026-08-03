@@ -1,0 +1,96 @@
+name: Deploy image to dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Existing immutable GHCR image tag, normally a 7-character commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: read
+  pull-requests: write
+
+concurrency:
+  group: slacathon26-dev-deployment
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/slaclab/slacathon26
+
+jobs:
+  deploy-dev:
+    name: Create dev deployment PR
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+    steps:
+      - name: Check out main
+        # v4.2.2
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [[ ! "${IMAGE_TAG}" =~ ^[0-9a-f]{7}$ ]]; then
+            echo "image_tag must be exactly seven lowercase hexadecimal characters."
+            exit 1
+          fi
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Verify image exists
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: docker manifest inspect "${IMAGE_NAME}:${IMAGE_TAG}" >/dev/null
+
+      - name: Prepare dev deployment branch
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          branch="deploy/dev-${IMAGE_TAG}"
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            echo "Deployment branch ${branch} already exists. Close or merge its PR before retrying."
+            exit 1
+          fi
+          git switch --create "${branch}"
+          image="${IMAGE_NAME}:${IMAGE_TAG}"
+          sed -i "s|^          image: .*|          image: ${image}|" kubernetes/overlays/dev/deployment-patch.yaml
+          grep -F "          image: ${image}" kubernetes/overlays/dev/deployment-patch.yaml
+          kubectl kustomize kubernetes/overlays/dev >/dev/null
+
+      - name: Push dev deployment branch
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add kubernetes/overlays/dev/deployment-patch.yaml
+          git commit -m "chore(deploy): deploy ${IMAGE_TAG} to dev"
+          git push --set-upstream origin "deploy/dev-${IMAGE_TAG}"
+
+      - name: Create dev deployment PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "deploy/dev-${IMAGE_TAG}" \
+            --title "chore(deploy): deploy ${IMAGE_TAG} to dev" \
+            --body "Image: ${IMAGE_NAME}:${IMAGE_TAG}
+
+Environment: dev
+
+Kustomize path: kubernetes/overlays/dev
+
+Merge this PR to let Argo CD deploy the image to the dev cluster. After dev is validated, run promote-production.yml with the same image tag."
