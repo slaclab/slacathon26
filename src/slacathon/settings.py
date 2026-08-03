@@ -17,10 +17,8 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
-
-    # str (not list) so sources never attempt json-decode on comma string
-    api_keys: str = Field(default="", description="Comma or space separated list of valid API keys")
 
     # Task configuration
     active_task: str = Field(default="flat_beam", description="Active task module name")
@@ -63,12 +61,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-# Post-process: turn the raw str into list in-place so existing code `settings.api_keys` sees list (no caller changes)
-if isinstance(settings.api_keys, str):
-    raw = settings.api_keys
-    parsed = [k.strip() for k in raw.replace(",", " ").split() if k.strip()] if raw else []
-    object.__setattr__(settings, "api_keys", parsed)
 
 # Normalize file paths to absolute using repo root (supports relative overrides in .env, works from any cwd)
 for key in ('leaderboard_file', 'db_file'):

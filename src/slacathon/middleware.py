@@ -162,14 +162,7 @@ def get_leaderboard() -> List[dict]:
         return [entry.to_dict() for entry in leaderboard]
 
 async def verify_api_key(x_api_key: str = Header(...)) -> str:
-    valid = db_get_valid_api_keys() | set(settings.api_keys)
-    if not valid:
-        logger.warning(
-            "No API keys configured in settings. Using hardcoded development keys. "
-            "This is insecure — set SLACATHON_API_KEYS in your environment."
-        )
-        valid = {"key_123", "key_456", "key_789"}
-    if x_api_key not in valid:
+    if x_api_key not in db_get_valid_api_keys():
         logger.warning("Invalid API key attempted")
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key

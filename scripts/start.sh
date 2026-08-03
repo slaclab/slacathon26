@@ -2,11 +2,6 @@
 #
 # SLACATHON 2026 backend launcher
 #
-# Security note: Set SLACATHON_API_KEYS in your environment before starting.
-# Example:
-#   export SLACATHON_API_KEYS="your_strong_key_1,your_strong_key_2"
-# Or create a .env file (see .env.example) and it will be sourced automatically.
-#
 # To switch task logic:
 #   export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see src/slacathon/tasks/ dir)
 #
@@ -43,4 +38,3 @@ exec gunicorn \
     --error-logfile gunicorn-error.log \
     --log-level info \
     slacathon.main:app
-

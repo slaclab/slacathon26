@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slacathon26
+  namespace: slacathon26
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/slaclab/slacathon26:latest
+          envFrom:
+            - $patch: replace
+            - configMapRef:
+                name: slacathon26-config
+            - secretRef:
+                name: application-secrets

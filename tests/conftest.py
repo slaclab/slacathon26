@@ -27,8 +27,6 @@ def app(tmp_db, tmp_leaderboard):
     os.environ["SLACATHON_SMTP_HOST"] = "localhost"
     os.environ["SLACATHON_SMTP_PORT"] = "1025"
     os.environ["SLACATHON_ALTCHA_HMAC_KEY"] = "test-hmac-key"
-    os.environ["SLACATHON_API_KEYS"] = ""
-
     # Import after env is set so settings picks up overrides
     from slacathon import db
     db.DB_PATH = tmp_db

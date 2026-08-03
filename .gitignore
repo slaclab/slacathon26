@@ -103,6 +103,7 @@ celerybeat.pid
 
 # Environments
 .env
+secret.yaml
 .venv
 env/
 venv/
@@ -169,3 +170,4 @@ logs/
 # Temporary
 *.tmp
 *.bak
+.memory

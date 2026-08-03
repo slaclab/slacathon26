@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: slacathon26
+  namespace: slacathon26
+  labels:
+    app.kubernetes.io/name: slacathon26
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: slacathon26.example.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: slacathon26
+                port:
+                  name: http
