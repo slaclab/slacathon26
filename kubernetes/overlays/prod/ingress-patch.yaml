@@ -5,4 +5,4 @@ metadata:
   namespace: slacathon26
 spec:
   rules:
-    - host: slacathon26.example.com
+    - host: ard-modeling-service.slac.stanford.edu

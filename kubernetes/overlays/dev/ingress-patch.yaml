@@ -5,4 +5,4 @@ metadata:
   namespace: slacathon26
 spec:
   rules:
-    - host: dev.slacathon26.example.com
+    - host: ad-accel-online-ml-dev.slac.stanford.edu
