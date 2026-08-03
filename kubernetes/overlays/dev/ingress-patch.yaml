@@ -1,0 +1,8 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: slacathon26
+  namespace: slacathon26
+spec:
+  rules:
+    - host: dev.slacathon26.example.com

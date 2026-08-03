@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
 
       - name: Capture merged revision
-        run: echo "IMAGE_TAG=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        run: echo "IMAGE_TAG=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_ENV"
 
       - name: Log in to GitHub Container Registry
         # v3.4.0
@@ -52,25 +52,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.IMAGE_NAME }}:main
+            ${{ env.IMAGE_NAME }}:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ env.IMAGE_TAG }}
-
-      - name: Update GitOps image descriptor
-        run: |
-          image="${IMAGE_NAME}:${IMAGE_TAG}"
-          sed -i "s|^\(          image: \).*|\1${image}|" kubernetes/deployment.yaml
-          grep -F "          image: ${image}" kubernetes/deployment.yaml
-
-      - name: Commit deployment descriptor
-        run: |
-          if git diff --quiet -- kubernetes/deployment.yaml; then
-            echo "Deployment descriptor already references ${IMAGE_TAG}."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add kubernetes/deployment.yaml
-          git commit -m "chore(deploy): release ${IMAGE_TAG} [skip ci]"
-          git push origin HEAD:main

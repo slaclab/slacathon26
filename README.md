@@ -21,28 +21,69 @@ Each task defines:
 
 See the live site and optimizer clients (in clients/) for usage examples.
 
-## Production deployment (GitOps)
+## Kubernetes deployment (GitOps)
 
-The repository contains a GitOps-ready Kubernetes descriptor in
-[`kubernetes/`](kubernetes/). A GitHub Actions workflow runs only after a pull
-request is merged into `main`: it publishes
-`ghcr.io/slaclab/slacathon26:<main-commit-sha>`, updates the Deployment's image
-reference to that immutable tag, and commits that one descriptor change. Argo
-CD, or another GitOps reconciler, should watch `kubernetes/` and reconcile the
-resulting commit.
+The repository contains a GitOps-ready Kubernetes base and two Kustomize
+overlays in [`kubernetes/`](kubernetes/):
+
+- `.github/workflows/release-deploy.yml` builds and publishes an image after an
+  application pull request is merged into `main`.
+- `.github/workflows/deploy.yml` is started manually from GitHub Actions with an
+  immutable image tag. It updates dev first, then pauses for approval through
+  the protected `production` Environment before updating prod.
+
+Both environments use the same base resources. Their overlay differences are
+the image reference and the Ingress hostname. The dev and prod overlays are
+intended to be reconciled by Argo CD applications in separate Kubernetes
+clusters.
+
+The release workflow publishes both
+`ghcr.io/slaclab/slacathon26:<short-commit-sha>` and the convenience alias
+`ghcr.io/slaclab/slacathon26:latest`. The deploy workflow requires the immutable
+7-character commit-SHA tag; it never promotes `latest` or rebuilds an image for
+production.
 
 Before the first sync:
 
 1. Set the `slacathon26` GHCR package visibility to **public**.
-2. Configure a GitHub ruleset for `main` that requires pull requests for human
-   changes, but allows the GitHub Actions app to bypass that requirement solely
-   for the generated deployment-image commit. Enable workflow write permission
-   for the repository's `GITHUB_TOKEN`.
-3. Create the application Secret outside this repository from
-   `kubernetes/secret.example.yaml`; replace every placeholder and apply it to
-   the `slacathon26` namespace. Never commit the populated file.
-4. Configure Argo CD to reconcile the `kubernetes/` directory. The cluster must
+2. Create a GitHub Environment named `dev`. The dev job in `deploy.yml` uses
+   this environment for deployment tracking; required reviewers are optional.
+3. Create a GitHub Environment named `production` and configure required
+   reviewers. This is the approval gate between dev and production in
+   `deploy.yml`.
+4. Configure a GitHub ruleset for `main` that requires pull requests for human
+   changes, but allows the GitHub Actions app to push deployment descriptor
+   commits. Enable workflow write permission for the repository's
+   `GITHUB_TOKEN`.
+5. Replace the example hosts in
+   `kubernetes/overlays/dev/ingress-patch.yaml` and
+   `kubernetes/overlays/prod/ingress-patch.yaml` with the real environment
+   hostnames.
+6. Install/configure the `ricoberger.de/v1alpha1` VaultSecret controller in each
+   cluster. It must be able to authenticate to Vault and reconcile the
+   `VaultSecret` resource in the base.
+7. Populate these Vault paths with the four required properties:
+   `SLACATHON_ALTCHA_HMAC_KEY`, `SLACATHON_PUBLIC_URL`,
+   `SLACATHON_SMTP_HOST`, and `SLACATHON_SMTP_FROM`:
+
+   ```text
+   secret/ad/ad-accel-online-ml-dev/slacathon26/secret
+   secret/ad/ad-accel-online-ml-prod/slacathon26/secret
+   ```
+
+   The VaultSecret resource generates the Kubernetes Secret
+   `application-secrets`; no secret values are committed to Git.
+8. Configure one Argo CD application to reconcile
+   `kubernetes/overlays/dev` in the dev cluster and another to reconcile
+   `kubernetes/overlays/prod` in the production cluster. Each cluster must
    provide a default StorageClass capable of a `1Gi` `ReadWriteOnce` claim.
+
+To deploy an image, open the `Deploy image` workflow in GitHub Actions, choose
+`Run workflow`, and enter the 7-character commit SHA published by the release
+workflow. The workflow commits the image to the dev overlay first. Once dev has
+been checked, an authorized reviewer approves the `production`
+Environment; the workflow then commits the same image SHA to the prod overlay.
+Argo CD reconciles each overlay in its respective cluster.
 
 The Deployment intentionally has one replica and uses a `Recreate` strategy:
 SQLite and the leaderboard file share a persistent volume and are not safe for

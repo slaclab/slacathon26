@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/slaclab/slacathon26:main
+          image: ghcr.io/slaclab/slacathon26:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -29,7 +29,7 @@ spec:
             - configMapRef:
                 name: slacathon26-config
             - secretRef:
-                name: slacathon26-secrets
+                name: application-secrets
           volumeMounts:
             - name: data
               mountPath: /app/data

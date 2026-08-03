@@ -3,6 +3,8 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - configmap.yaml
+  - vault-secret.yaml
   - persistentvolumeclaim.yaml
   - service.yaml
   - deployment.yaml
+  - ingress.yaml
