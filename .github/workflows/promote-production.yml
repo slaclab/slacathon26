@@ -12,6 +12,7 @@ permissions:
   contents: write
   packages: read
   pull-requests: write
+  issues: write
 
 concurrency:
   group: slacathon26-production-promotion
@@ -25,6 +26,14 @@ jobs:
     name: Verify dev image
     runs-on: ubuntu-latest
     steps:
+      - name: Generate app token
+        id: app-token
+        # v1.11.0
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69f6f4e1e15
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Check out main
         # v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -43,7 +52,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Verify image exists
@@ -65,12 +74,21 @@ jobs:
     environment:
       name: production
     steps:
+      - name: Generate app token
+        id: app-token
+        # v1.11.0
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69f6f4e1e15
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Check out latest main
         # v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Recheck dev image after approval
         env:
@@ -105,7 +123,7 @@ jobs:
 
       - name: Create production deployment PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           printf 'Image: %s\n\nEnvironment: production\n\nKustomize path: kubernetes/overlays/prod\n\nDev verification: the dev overlay references this exact image tag.\n\nMerge this PR to let Argo CD deploy the image to the production cluster.\n' \

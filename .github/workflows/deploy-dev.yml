@@ -12,6 +12,7 @@ permissions:
   contents: write
   packages: read
   pull-requests: write
+  issues: write
 
 concurrency:
   group: slacathon26-dev-deployment
@@ -27,12 +28,21 @@ jobs:
     environment:
       name: dev
     steps:
+      - name: Generate app token
+        id: app-token
+        # v1.11.0
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69f6f4e1e15
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Check out main
         # v4.2.2
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: main
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Validate image tag
         env:
@@ -45,7 +55,7 @@ jobs:
 
       - name: Log in to GitHub Container Registry
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Verify image exists
@@ -80,7 +90,7 @@ jobs:
 
       - name: Create dev deployment PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           printf 'Image: %s\n\nEnvironment: dev\n\nKustomize path: kubernetes/overlays/dev\n\nMerge this PR to let Argo CD deploy the image to the dev cluster. After dev is validated, run promote-production.yml with the same image tag.\n' \
