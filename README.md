@@ -21,7 +21,24 @@ Each task defines:
 
 See the live site and optimizer clients (in clients/) for usage examples.
 
+## Documentation
+
+Full documentation lives in [`docs/`](docs/README.md):
+
+| | |
+|---|---|
+| [Getting Started](docs/getting-started/installation.md) | Install, configure, run |
+| [Quickstart](docs/getting-started/quickstart.md) | Zero to leaderboard in 5 steps |
+| [Architecture](docs/architecture/overview.md) | Components, design decisions |
+| [API Reference](docs/api/endpoints.md) | All endpoints with examples |
+| [Deployment / CI-CD](docs/deployment/ci-cd.md) | GitHub Actions workflows |
+| [Deployment / Kubernetes](docs/deployment/kubernetes.md) | Manifests + Kustomize overlays |
+| [Writing a Task](docs/guides/writing-a-task.md) | Add a new optimization challenge |
+| [Optimizer Clients](docs/guides/optimizer-clients.md) | Use the provided client libraries |
+
 ## Kubernetes deployment (GitOps)
+
+> Full workflow reference: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 The repository contains a GitOps-ready Kubernetes base and two Kustomize
 overlays in [`kubernetes/`](kubernetes/):

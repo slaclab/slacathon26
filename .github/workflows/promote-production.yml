@@ -75,7 +75,8 @@ jobs:
       - name: Recheck dev image after approval
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
-        run: grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
+        run: |
+          grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
 
       - name: Prepare production deployment branch
         env:
@@ -111,12 +112,15 @@ jobs:
             --base main \
             --head "deploy/prod-${IMAGE_TAG}" \
             --title "chore(deploy): promote ${IMAGE_TAG} to production" \
-            --body "Image: ${IMAGE_NAME}:${IMAGE_TAG}
+            --body "$(cat <<PRBODY
+            Image: ${IMAGE_NAME}:${IMAGE_TAG}
 
-Environment: production
+            Environment: production
 
-Kustomize path: kubernetes/overlays/prod
+            Kustomize path: kubernetes/overlays/prod
 
-Dev verification: the dev overlay references this exact image tag.
+            Dev verification: the dev overlay references this exact image tag.
 
-Merge this PR to let Argo CD deploy the image to the production cluster."
+            Merge this PR to let Argo CD deploy the image to the production cluster.
+            PRBODY
+            )"
