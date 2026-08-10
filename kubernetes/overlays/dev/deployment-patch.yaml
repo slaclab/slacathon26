@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/slaclab/slacathon26:latest
+          image: ghcr.io/slaclab/slacathon26:bcda76d
           envFrom:
             - $patch: replace
             - configMapRef:
