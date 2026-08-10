@@ -87,10 +87,13 @@ jobs:
             --base main \
             --head "deploy/dev-${IMAGE_TAG}" \
             --title "chore(deploy): deploy ${IMAGE_TAG} to dev" \
-            --body "Image: ${IMAGE_NAME}:${IMAGE_TAG}
+            --body "$(cat <<PRBODY
+Image: ${IMAGE_NAME}:${IMAGE_TAG}
 
 Environment: dev
 
 Kustomize path: kubernetes/overlays/dev
 
-Merge this PR to let Argo CD deploy the image to the dev cluster. After dev is validated, run promote-production.yml with the same image tag."
+Merge this PR to let Argo CD deploy the image to the dev cluster. After dev is validated, run promote-production.yml with the same image tag.
+PRBODY
+)"

@@ -112,7 +112,8 @@ jobs:
             --base main \
             --head "deploy/prod-${IMAGE_TAG}" \
             --title "chore(deploy): promote ${IMAGE_TAG} to production" \
-            --body "Image: ${IMAGE_NAME}:${IMAGE_TAG}
+            --body "$(cat <<PRBODY
+Image: ${IMAGE_NAME}:${IMAGE_TAG}
 
 Environment: production
 
@@ -120,4 +121,6 @@ Kustomize path: kubernetes/overlays/prod
 
 Dev verification: the dev overlay references this exact image tag.
 
-Merge this PR to let Argo CD deploy the image to the production cluster."
+Merge this PR to let Argo CD deploy the image to the production cluster.
+PRBODY
+)"
