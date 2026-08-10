@@ -75,7 +75,8 @@ jobs:
       - name: Recheck dev image after approval
         env:
           IMAGE_TAG: ${{ inputs.image_tag }}
-        run: grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
+        run: |
+          grep -F "          image: ${IMAGE_NAME}:${IMAGE_TAG}" kubernetes/overlays/dev/deployment-patch.yaml
 
       - name: Prepare production deployment branch
         env:
