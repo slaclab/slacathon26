@@ -29,7 +29,7 @@ jobs:
       - name: Generate app token
         id: app-token
         # v1.11.0
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69f6f4e1e15
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
@@ -77,7 +77,7 @@ jobs:
       - name: Generate app token
         id: app-token
         # v1.11.0
-        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69f6f4e1e15
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
