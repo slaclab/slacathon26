@@ -108,19 +108,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
+          printf 'Image: %s\n\nEnvironment: production\n\nKustomize path: kubernetes/overlays/prod\n\nDev verification: the dev overlay references this exact image tag.\n\nMerge this PR to let Argo CD deploy the image to the production cluster.\n' \
+            "${IMAGE_NAME}:${IMAGE_TAG}" > /tmp/pr-body.txt
           gh pr create \
             --base main \
             --head "deploy/prod-${IMAGE_TAG}" \
             --title "chore(deploy): promote ${IMAGE_TAG} to production" \
-            --body "$(cat <<PRBODY
-            Image: ${IMAGE_NAME}:${IMAGE_TAG}
-
-            Environment: production
-
-            Kustomize path: kubernetes/overlays/prod
-
-            Dev verification: the dev overlay references this exact image tag.
-
-            Merge this PR to let Argo CD deploy the image to the production cluster.
-            PRBODY
-            )"
+            --body-file /tmp/pr-body.txt
