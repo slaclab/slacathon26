@@ -56,7 +56,7 @@ kubernetes/
 ### Ingress
 
 - Base ingress routes only the `/slacathon26` URL prefix to the service.
-- NGINX rewrite strips that prefix before forwarding to the app.
+- Ingress uses a standard `Prefix` path rule (no regex path segments).
 - Requests to `/` are not routed by this ingress.
 - Environment overlays patch only the hostname.
 

@@ -5,17 +5,14 @@ metadata:
   namespace: slacathon26
   labels:
     app.kubernetes.io/name: slacathon26
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
 spec:
   ingressClassName: nginx
   rules:
     - host: slacathon26.example.invalid
       http:
         paths:
-          - path: /slacathon26(/|$)(.*)
-            pathType: ImplementationSpecific
+          - path: /slacathon26
+            pathType: Prefix
             backend:
               service:
                 name: slacathon26
