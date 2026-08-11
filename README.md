@@ -74,9 +74,9 @@ Before the first sync:
    and deployment changes. Allow the GitHub Actions app to create branches and
    pull requests, and enable workflow write permission for the repository's
    `GITHUB_TOKEN`.
-5. Replace the example hosts in
-   `kubernetes/overlays/dev/ingress-patch.yaml` and
-   `kubernetes/overlays/prod/ingress-patch.yaml` with the real environment
+5. Set the ingress host values in the inline JSON6902 patches in
+   `kubernetes/overlays/dev/kustomization.yaml` and
+   `kubernetes/overlays/prod/kustomization.yaml` to the real environment
    hostnames.
 6. Install/configure the `ricoberger.de/v1alpha1` VaultSecret controller in each
    cluster. It must be able to authenticate to Vault and reconcile the

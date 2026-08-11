@@ -53,6 +53,13 @@ kubernetes/
 
 `ClusterIP` on port 8000. An external ingress or gateway handles public traffic.
 
+### Ingress
+
+- Base ingress routes only the `/slacathon26` URL prefix to the service.
+- NGINX rewrite strips that prefix before forwarding to the app.
+- Requests to `/` are not routed by this ingress.
+- Environment overlays patch only the hostname.
+
 ### ConfigMap (`slacathon26-config`)
 
 | Key | Value |
@@ -84,7 +91,7 @@ Vault paths:
 | Patch | What it changes |
 |---|---|
 | `deployment-patch.yaml` | Image tag for dev |
-| `ingress-patch.yaml` | Host: `ad-accel-online-ml-dev.slac.stanford.edu` |
+| `kustomization.yaml` inline JSON6902 patch | Host: `ad-accel-online-ml-dev.slac.stanford.edu` |
 | `secret-patch.yaml` | Vault path → `ad-accel-online-ml-dev` |
 
 ### prod overlay
@@ -92,7 +99,7 @@ Vault paths:
 | Patch | What it changes |
 |---|---|
 | `deployment-patch.yaml` | Image tag for prod |
-| `ingress-patch.yaml` | Host: `ard-modeling-service.slac.stanford.edu` |
+| `kustomization.yaml` inline JSON6902 patch | Host: `ard-modeling-service.slac.stanford.edu` |
 | `secret-patch.yaml` | Vault path → `ad-accel-online-ml-prod` |
 
 ## Argo CD
