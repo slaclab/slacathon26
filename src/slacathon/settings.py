@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     smtp_username: str | None = Field(default=None)
     smtp_password: str | None = Field(default=None)
     smtp_from: str = Field(default="noreply@slacathon26.local")
+    smtp_validate_certs: bool = Field(default=True)
     altcha_hmac_key: str = Field(default="dev-hmac-key-change-in-prod")
     verify_timeout_hours: int = Field(default=24)
     cleanup_interval_minutes: int = Field(default=10)
