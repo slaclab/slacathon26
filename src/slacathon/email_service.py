@@ -25,6 +25,7 @@ async def _send(to: str, subject: str, html_body: str):
         use_tls=settings.smtp_use_tls,
         username=settings.smtp_username,
         password=settings.smtp_password,
+        validate_certs=settings.smtp_validate_certs,
     )
     logger.info(f"Email sent to {to}: {subject}")
 
