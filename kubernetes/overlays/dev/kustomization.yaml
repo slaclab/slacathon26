@@ -4,5 +4,13 @@ resources:
   - ../../base
 patches:
   - path: deployment-patch.yaml
-  - path: ingress-patch.yaml
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: Ingress
+      name: slacathon26
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: ad-accel-online-ml-dev.slac.stanford.edu
   - path: secret-patch.yaml
