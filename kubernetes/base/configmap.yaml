@@ -8,5 +8,6 @@ data:
   SLACATHON_ROOT_PATH: /slacathon26
   SLACATHON_DB_FILE: /app/data/slacathon.db
   SLACATHON_LEADERBOARD_FILE: /app/data/leaderboard.json
-  SLACATHON_SMTP_PORT: "587"
+  SLACATHON_SMTP_PORT: "25"
+  SLACATHON_SMTP_USE_TLS: "false"
   SLACATHON_LOG_LEVEL: info
