@@ -27,6 +27,9 @@ cp .env.example .env
 | `SLACATHON_PUBLIC_URL` | `http://localhost:8000` | **Yes (prod)** | Base URL for email verification links |
 | `SLACATHON_SMTP_HOST` | `localhost` | **Yes (prod)** | SMTP server hostname |
 | `SLACATHON_SMTP_PORT` | `1025` | No | SMTP port |
+| `SLACATHON_SMTP_USE_TLS` | `false` | No | Enable TLS for SMTP (use `true` for port 587) |
+| `SLACATHON_SMTP_USERNAME` | `null` | No | SMTP authentication username (optional) |
+| `SLACATHON_SMTP_PASSWORD` | `null` | No | SMTP authentication password (optional) |
 | `SLACATHON_SMTP_FROM` | `noreply@slacathon26.local` | **Yes (prod)** | Sender address |
 | `SLACATHON_ALTCHA_HMAC_KEY` | `dev-hmac-key-change-in-prod` | **Yes (prod)** | CAPTCHA signing secret — change before deploying |
 | `SLACATHON_VERIFY_TIMEOUT_HOURS` | `24` | No | Verification link lifetime |

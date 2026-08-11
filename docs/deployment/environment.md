@@ -18,6 +18,7 @@ In Kubernetes, config comes from two sources:
 | `SLACATHON_DB_FILE` | `/app/data/slacathon.db` | Path on PVC |
 | `SLACATHON_LEADERBOARD_FILE` | `/app/data/leaderboard.json` | Path on PVC |
 | `SLACATHON_SMTP_PORT` | `587` | Standard TLS SMTP |
+| `SLACATHON_SMTP_USE_TLS` | `true` | Enable TLS for SMTP (required for port 587) |
 | `SLACATHON_LOG_LEVEL` | `info` | |
 
 ## Vault Secret Keys
@@ -30,6 +31,8 @@ Populate both Vault paths with these four keys before first deploy:
 | `SLACATHON_PUBLIC_URL` | Base URL for verification email links (e.g. `https://your-host.com`) |
 | `SLACATHON_SMTP_HOST` | SMTP server hostname |
 | `SLACATHON_SMTP_FROM` | Sender address for outgoing emails |
+| `SLACATHON_SMTP_USERNAME` | SMTP authentication username (optional) |
+| `SLACATHON_SMTP_PASSWORD` | SMTP authentication password (optional) |
 
 Vault paths:
 - dev: `secret/ad/ad-accel-online-ml-dev/slacathon26/secret`
