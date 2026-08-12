@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     log_level: str = Field(default="info")
 
     # File paths (resolved relative to repo root for cwd-independence; .env can override with relative or absolute)
-    leaderboard_file: str = Field(default_factory=lambda: _data_file("data/leaderboard.json"))
     db_file: str = Field(default_factory=lambda: _data_file("data/slacathon.db"))
 
     # Limits
@@ -67,7 +66,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Normalize file paths to absolute using repo root (supports relative overrides in .env, works from any cwd)
-for key in ('leaderboard_file', 'db_file'):
+for key in ('db_file',):
     val = getattr(settings, key)
     if val and not Path(val).is_absolute():
         object.__setattr__(settings, key, _data_file(val))
