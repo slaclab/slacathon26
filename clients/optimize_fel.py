@@ -9,13 +9,14 @@ score means a brighter pulse. The task is solved at 4 mJ, i.e. score <= -4.
 """
 
 import logging
+import os
 
 from gp_optimizer import GPOptimizer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-API_KEY = "GAQN6bcnSLw3sD2UpNCUrnLrFFLjG-0GGdueBNO4ZFc"
-BASE_URL = "http://localhost:8000"
+API_KEY = os.getenv("API_KEY", "dev_key")
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 if __name__ == "__main__":
     opt = GPOptimizer(api_key=API_KEY, base_url=BASE_URL)
