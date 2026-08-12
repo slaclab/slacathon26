@@ -1,6 +1,4 @@
-"""SQLite-backed storage for jobs, quota charges, and users (API keys + display names).
-
-This module is the foundation for the scoped migration. Leaderboard remains in JSON.
+"""SQLite-backed storage for jobs, quota charges, users (API keys + display names), and leaderboard.
 
 Example:
     from slacathon.db import init_db, load_users, get_valid_api_keys
@@ -74,9 +72,20 @@ def init_db() -> None:
                     kind TEXT DEFAULT 'validate'
                 );
 
+                CREATE TABLE IF NOT EXISTS leaderboard (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    task_name TEXT NOT NULL DEFAULT '',
+                    input_json TEXT NOT NULL,
+                    score REAL NOT NULL,
+                    solved INTEGER NOT NULL DEFAULT 0,
+                    timestamp REAL NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_users_display ON users(display_name);
                 CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id);
                 CREATE INDEX IF NOT EXISTS idx_quota_user ON quota_charges(user_id);
+                CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard(score);
             """)
 
             # Idempotent column additions for existing DBs
@@ -85,11 +94,18 @@ def init_db() -> None:
                 "ALTER TABLE users ADD COLUMN verified INTEGER DEFAULT 0",
                 "ALTER TABLE users ADD COLUMN verify_token TEXT UNIQUE",
                 "ALTER TABLE users ADD COLUMN expires_at REAL",
+                "ALTER TABLE leaderboard ADD COLUMN task_name TEXT NOT NULL DEFAULT ''",
             ]:
                 try:
                     conn.execute(alter)
                 except Exception:
                     pass  # column already exists
+
+            # Index on task_name created after the ALTER so it works on existing DBs too
+            try:
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_leaderboard_task ON leaderboard(task_name)")
+            except Exception:
+                pass
 
             conn.commit()
             logger.info(f"Database initialized at {DB_PATH}")
@@ -414,6 +430,84 @@ def charge_quota(
 
 
 
+
+
+# -----------------------
+# Leaderboard
+# -----------------------
+
+def get_all_leaderboard_entries(task_name: str) -> list[dict]:
+    """Return leaderboard rows for the given task, ordered by score ascending (caller re-sorts as needed)."""
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(
+                "SELECT id, user_id, input_json, score, solved, timestamp FROM leaderboard "
+                "WHERE task_name = ? ORDER BY score ASC",
+                (task_name,),
+            ).fetchall()
+            return [
+                {
+                    "id": r["id"],
+                    "user_id": r["user_id"],
+                    "input": _json_loads(r["input_json"]),
+                    "score": r["score"],
+                    "solved": bool(r["solved"]),
+                    "timestamp": r["timestamp"],
+                }
+                for r in rows
+            ]
+        finally:
+            conn.close()
+
+
+def insert_leaderboard_entry(user_id: str, task_name: str, input: dict, score: float, solved: bool, timestamp: float) -> int:
+    """Insert a leaderboard row. Returns the new row id."""
+    with _lock:
+        conn = _connect()
+        try:
+            cur = conn.execute(
+                "INSERT INTO leaderboard (user_id, task_name, input_json, score, solved, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                (user_id, task_name, _json_dumps(input), score, int(solved), timestamp),
+            )
+            conn.commit()
+            return cur.lastrowid
+        finally:
+            conn.close()
+
+
+def input_exists_in_leaderboard(task_name: str, input: dict) -> bool:
+    """Return True if an entry with exactly this input already exists for the given task."""
+    input_str = _json_dumps(input)
+    with _lock:
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM leaderboard WHERE task_name = ? AND input_json = ? LIMIT 1",
+                (task_name, input_str),
+            ).fetchone()
+            return row is not None
+        finally:
+            conn.close()
+
+
+def trim_leaderboard(task_name: str, max_size: int, minimize: bool) -> None:
+    """Keep only the top `max_size` entries for the given task; remove the rest."""
+    order = "ASC" if minimize else "DESC"
+    with _lock:
+        conn = _connect()
+        try:
+            conn.execute(
+                f"""
+                DELETE FROM leaderboard WHERE task_name = ? AND id NOT IN (
+                    SELECT id FROM leaderboard WHERE task_name = ? ORDER BY score {order} LIMIT ?
+                )
+                """,
+                (task_name, task_name, max_size),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def get_job(job_id: str) -> dict | None:

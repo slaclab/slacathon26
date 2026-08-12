@@ -4,7 +4,8 @@ Migration script: Move jobs.json + user_names.json data into SQLite.
 
 - user_names.json -> users table (api_key + display_name)
 - jobs.json (NDJSON) -> jobs table + quota_charges table
-- leaderboard.json is left completely untouched (still JSON)
+
+Leaderboard starts empty in the new DB (leaderboard.json not migrated by design).
 
 Usage:
     python scripts/migrate_to_sqlite.py [--dry-run] [--force]
@@ -171,8 +172,9 @@ def migrate_jobs_and_charges(dry_run: bool, data_dir: Path, timestamp: int) -> t
     return len(job_map), len(charges)
 
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Migrate JSON data to SQLite (jobs + users only).")
+    parser = argparse.ArgumentParser(description="Migrate JSON data to SQLite (jobs + users + leaderboard).")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be done, do not modify DB or files.")
     parser.add_argument("--force", action="store_true", help="Proceed even if DB already contains data.")
     args = parser.parse_args()
@@ -210,8 +212,6 @@ def main():
     print(f"Users migrated:   {n_users}")
     print(f"Jobs migrated:    {n_jobs}")
     print(f"Charges created:  {n_charges}")
-    print()
-    print("leaderboard.json was NOT touched (still using JSON as designed).")
     print()
     if not args.dry_run:
         print("Migration finished. You can now restart the server.")
