@@ -119,7 +119,7 @@ async def register(body: RegisterRequest):
     expires_at = time.time() + settings.verify_timeout_hours * 3600
     row_id = _db.create_unverified_user(body.email, body.display_name, verify_token, expires_at)
 
-    verify_url = f"{settings.public_url}{settings.root_path}/verify?token={verify_token}"
+    verify_url = f"{settings.public_url}/verify?token={verify_token}"
     try:
         await send_verification_email(body.email, verify_url, settings.verify_timeout_hours)
     except Exception:
