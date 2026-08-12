@@ -1,11 +1,13 @@
+import os
+
 import numpy as np
 from xopt_optimizer import XoptOptimizer
 
 from xopt import Xopt, Evaluator, VOCS
 from xopt.generators.bayesian import UpperConfidenceBoundGenerator
 
-API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
-BASE_URL = "https://halavanau.group/slacathon26"
+API_KEY = os.environ["API_KEY"]
+BASE_URL = os.getenv("BASE_URL", "https://ad-accel-online-ml-dev.slac.stanford.edu/slacathon26/")
 
 # Fixed values for some parameters (we discover which ones are fixed automatically below)
 FIXED_VALUES = [1.0, 1.4]

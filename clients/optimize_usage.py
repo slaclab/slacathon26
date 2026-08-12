@@ -1,8 +1,10 @@
+import os
+
 import numpy as np
 from gp_optimizer import GPOptimizer
 
-API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
-BASE_URL = "https://halavanau.group/slacathon26"
+API_KEY = os.environ["API_KEY"]
+BASE_URL = os.getenv("BASE_URL", "https://ad-accel-online-ml-dev.slac.stanford.edu/slacathon26/")
 
 FIXED_VALUES = [1.0, 1.4]
 BOUNDS = [(1.0, 3.0), (-3.0, -2.0), (0.0, 2.0)]

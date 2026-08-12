@@ -13,12 +13,12 @@ drives the emittance as low as it can.
 import logging
 import os
 
-from GPOptimizer import GPOptimizer
+from gp_optimizer import GPOptimizer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-API_KEY = os.getenv("API_KEY", "dev_key")
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+API_KEY = os.environ["API_KEY"]
+BASE_URL = os.getenv("BASE_URL", "https://ad-accel-online-ml-dev.slac.stanford.edu/slacathon26/")
 
 if __name__ == "__main__":
     opt = GPOptimizer(api_key=API_KEY, base_url=BASE_URL)

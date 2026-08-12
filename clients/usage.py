@@ -1,8 +1,10 @@
-import requests
+import os
 import time
 
-API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
-BASE_URL = "https://halavanau.group/slacathon26"
+import requests
+
+API_KEY = os.environ["API_KEY"]
+BASE_URL = os.getenv("BASE_URL", "https://ad-accel-online-ml-dev.slac.stanford.edu/slacathon26/")
 
 headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
 
