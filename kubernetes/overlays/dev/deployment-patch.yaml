@@ -8,4 +8,4 @@ spec:
     spec:
       containers:
         - name: app
-          image: ghcr.io/slaclab/slacathon26:c5068d9
+          image: ghcr.io/slaclab/slacathon26:2e8b222
