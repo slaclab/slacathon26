@@ -13,7 +13,7 @@ drives the emittance as low as it can.
 import logging
 import os
 
-from GPOptimizer import GPOptimizer
+from gp_optimizer import GPOptimizer
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
