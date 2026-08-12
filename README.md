@@ -145,7 +145,7 @@ Environment is configured automatically inside the container — `SLACATHON_SMTP
 
 ### 1. Clone
 ```bash
-git clone https://github.com/balticfish/slacathon26.git
+git clone https://github.com/slaclab/slacathon26.git
 cd slacathon26
 ```
 
