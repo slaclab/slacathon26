@@ -367,13 +367,35 @@ curl http://localhost:8000/slacathon26/task
 
 ### Storage & Migration
 
-Jobs, validation quota, leaderboard, and user (API key + display name) data live in
-`data/slacathon.db` (SQLite) by default. Set `SLACATHON_DB_BACKEND=rqlite` to use an
-[rqlite](https://rqlite.io) cluster instead (`SLACATHON_RQLITE_HOST`, `_PORT`, `_USER`,
-`_PASSWORD`, `_SCHEME`, `_TIMEOUT`). Locally: `docker compose --profile rqlite up -d rqlite`.
-See `docs/todo/rqlite-backend.md` for the design and the Kubernetes cutover runbook.
+Jobs, validation quota, leaderboard, and user (API key + display name) data live in one
+database. Two backends are supported, selected with `SLACATHON_DB_BACKEND`:
 
-The leaderboard is intentionally kept as a small plain JSON file (`data/leaderboard.json`).
+| Backend | When | Notes |
+|---------|------|-------|
+| `sqlite` (default) | local dev, tests, single pod | embedded file at `SLACATHON_DB_FILE` (`data/slacathon.db`) |
+| `rqlite` | Kubernetes | [rqlite](https://rqlite.io) cluster over HTTP via `pyrqlite`; replicated, with built-in S3 backups |
+
+rqlite settings (all optional, used only when `SLACATHON_DB_BACKEND=rqlite`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SLACATHON_RQLITE_HOST` | `localhost` | rqlite host or Kubernetes Service name (`rqlite`) |
+| `SLACATHON_RQLITE_PORT` | `4001` | rqlite HTTP port |
+| `SLACATHON_RQLITE_SCHEME` | `http` | `http` or `https` |
+| `SLACATHON_RQLITE_USER` | *(empty)* | basic-auth user from rqlite `auth.json` (`app` in k8s) |
+| `SLACATHON_RQLITE_PASSWORD` | *(empty)* | basic-auth password; keep in Vault, never in `.env` committed to git |
+| `SLACATHON_RQLITE_TIMEOUT` | `10.0` | seconds per HTTP request |
+
+Run locally against rqlite:
+
+```bash
+docker compose --profile rqlite up -d rqlite        # or: rqlited -node-id 1 ~/rqlite-node
+SLACATHON_DB_BACKEND=rqlite SLACATHON_RQLITE_HOST=localhost \
+  PYTHONPATH=src uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
+SLACATHON_RQLITE_HOST=localhost pytest -m rqlite     # live integration tests
+```
+
+Design, Kubernetes manifests and the cutover runbook: `docs/todo/rqlite-backend.md`.
 
 If you are upgrading from an older version that used the NDJSON/JSON files, run the one-time migration:
 
