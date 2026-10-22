@@ -18,7 +18,14 @@ cp .env.example .env
 | `SLACATHON_WORKERS` | `1` | No | Number of workers — keep at 1 (SQLite constraint) |
 | `SLACATHON_TIMEOUT` | `300` | No | Gunicorn worker timeout (seconds) |
 | `SLACATHON_LOG_LEVEL` | `info` | No | Logging verbosity (`debug`, `info`, `warning`, `error`) |
-| `SLACATHON_DB_FILE` | `data/slacathon.db` | No | SQLite database path |
+| `SLACATHON_DB_FILE` | `data/slacathon.db` | No | SQLite database path (used when backend is `sqlite`) |
+| `SLACATHON_DB_BACKEND` | `sqlite` | No | Storage backend: `sqlite` (embedded file) or `rqlite` (HTTP cluster) |
+| `SLACATHON_RQLITE_HOST` | `localhost` | No | rqlite host (backend `rqlite`) |
+| `SLACATHON_RQLITE_PORT` | `4001` | No | rqlite HTTP port |
+| `SLACATHON_RQLITE_SCHEME` | `http` | No | `http` or `https` |
+| `SLACATHON_RQLITE_USER` | `` | No | rqlite basic-auth user |
+| `SLACATHON_RQLITE_PASSWORD` | `` | No | rqlite basic-auth password (store in Vault) |
+| `SLACATHON_RQLITE_TIMEOUT` | `10.0` | No | Seconds per rqlite HTTP request |
 | `SLACATHON_LEADERBOARD_FILE` | `data/leaderboard.json` | No | Leaderboard JSON path |
 | `SLACATHON_MAX_QUERIES_PER_USER` | `10` | No | In-memory history buffer size per user |
 | `SLACATHON_MAX_VALIDATIONS_PER_USER` | `10000` | No | Hard quota per user (overridden by task constant) |

@@ -30,7 +30,8 @@ kubernetes/
 
 | Field | Value |
 |---|---|
-| Replicas | 1 (SQLite single-writer constraint) |
+| Replicas | 1 (per-process caches in `job_manager`/`middleware`; sqlite file is single-writer) |
+| rqlite | `StatefulSet rqlite` (3 nodes, 1 in dev), Services `rqlite` / `rqlite-headless`, `VaultSecret rqlite-secrets` (`auth.json`, `backup.json`) |
 | Strategy | `Recreate` |
 | Image | patched per overlay |
 | Container port | 8000 |

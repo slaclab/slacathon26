@@ -48,7 +48,7 @@ PYTHONPATH=src uvicorn slacathon.main:app \
 src/slacathon/
 ├── main.py           # all FastAPI routes
 ├── settings.py       # pydantic-settings, SLACATHON_ prefix
-├── db.py             # SQLite CRUD (users, jobs, quota_charges)
+├── db.py             # storage CRUD; sqlite file (default) or rqlite
 ├── job_manager.py    # job lifecycle + quota enforcement
 ├── middleware.py     # API key auth, leaderboard logic
 ├── captcha.py        # Altcha PoW challenge/verify
@@ -68,7 +68,16 @@ Files in `data/` are created on first run and are gitignored:
 
 | File | Content |
 |---|---|
-| `data/slacathon.db` | SQLite: `users`, `jobs`, `quota_charges` tables |
+| `data/slacathon.db` | SQLite: `users`, `jobs`, `quota_charges`, `leaderboard` tables (default backend) |
+
+### Running against rqlite locally
+
+```bash
+docker compose --profile rqlite up -d rqlite      # or: rqlited -node-id 1 ~/rqlite-node
+SLACATHON_DB_BACKEND=rqlite SLACATHON_RQLITE_HOST=localhost \
+  PYTHONPATH=src uvicorn slacathon.main:app --reload
+SLACATHON_RQLITE_HOST=localhost pytest -m rqlite   # live integration suite
+```
 | `data/leaderboard.json` | Top-15 leaderboard (plain JSON) |
 
 Reset for a clean slate:

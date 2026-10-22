@@ -260,7 +260,7 @@ SLACathon-v0.1-Tabby/
 │       ├── main.py           # routes (API + registration)
 │       ├── settings.py
 │       ├── middleware.py
-│       ├── db.py             # SQLite helpers
+│       ├── db.py             # storage helpers (sqlite file or rqlite cluster)
 │       ├── captcha.py        # Altcha PoW CAPTCHA
 │       ├── email_service.py  # async SMTP
 │       ├── job_manager.py
@@ -367,7 +367,11 @@ curl http://localhost:8000/slacathon26/task
 
 ### Storage & Migration
 
-Jobs, validation quota, and user (API key + display name) data live in `data/slacathon.db` (SQLite).
+Jobs, validation quota, leaderboard, and user (API key + display name) data live in
+`data/slacathon.db` (SQLite) by default. Set `SLACATHON_DB_BACKEND=rqlite` to use an
+[rqlite](https://rqlite.io) cluster instead (`SLACATHON_RQLITE_HOST`, `_PORT`, `_USER`,
+`_PASSWORD`, `_SCHEME`, `_TIMEOUT`). Locally: `docker compose --profile rqlite up -d rqlite`.
+See `docs/todo/rqlite-backend.md` for the design and the Kubernetes cutover runbook.
 
 The leaderboard is intentionally kept as a small plain JSON file (`data/leaderboard.json`).
 

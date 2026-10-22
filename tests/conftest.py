@@ -29,6 +29,8 @@ def app(tmp_db, tmp_leaderboard):
     os.environ["SLACATHON_ALTCHA_HMAC_KEY"] = "test-hmac-key"
     # Import after env is set so settings picks up overrides
     from slacathon import db
+    # Unit tests always run on the embedded sqlite file, even if a developer .env selects rqlite
+    db.DB_BACKEND = "sqlite"
     db.DB_PATH = tmp_db
     db.init_db()
 
@@ -51,3 +53,16 @@ def patch_externals():
         patch("slacathon.main.send_api_key_email", new_callable=AsyncMock),
     ):
         yield
+
+
+def db_rows(sql: str, params: tuple = ()) -> list[dict]:
+    """Backend-agnostic raw query helper for tests (goes through db._connect())."""
+    from slacathon import db
+    conn = db._connect()
+    try:
+        cur = conn.execute(sql, params)
+        rows = cur.fetchall() if cur.description else []
+        conn.commit()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()

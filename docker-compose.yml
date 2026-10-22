@@ -20,3 +20,17 @@ services:
     #   - "1025:1025"
     #   - "8025:8025"
     restart: unless-stopped
+
+  # Optional local rqlite node: docker compose --profile rqlite up -d rqlite
+  # then SLACATHON_DB_BACKEND=rqlite SLACATHON_RQLITE_HOST=localhost (or SLACATHON_RQLITE_HOST=rqlite inside compose)
+  rqlite:
+    image: rqlite/rqlite:8.43.0
+    profiles: [rqlite]
+    ports:
+      - "4001:4001"
+    volumes:
+      - rqlite-data:/rqlite/file
+    restart: unless-stopped
+
+volumes:
+  rqlite-data:

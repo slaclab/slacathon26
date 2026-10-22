@@ -24,7 +24,7 @@ Env var: `SLACATHON_ROOT_KEY`.
 
 ### 2. `src/slacathon/db.py`
 
-**Schema:** Add `is_admin INTEGER DEFAULT 0` column to `users` table (idempotent ALTER, same pattern as existing `email`/`verified` alters in `init_db()`).
+**Schema:** Add `is_admin INTEGER DEFAULT 0` column to `users` table by appending `("users", "is_admin", "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")` to `_MIGRATIONS` in `db.py` (applied by `init_db()` when the column is missing).
 
 **New functions:**
 ```python

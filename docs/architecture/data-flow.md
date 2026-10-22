@@ -40,7 +40,7 @@ sequenceDiagram
     C->>A: POST /validate {input: {...}}\n X-API-Key: <key>
     A->>DB: verify API key
     A->>A: validate input schema (TASK.Input)
-    A->>DB: charge_quota() [atomic BEGIN IMMEDIATE]
+    A->>DB: charge_quota() [single conditional INSERT]
     A->>DB: insert_job(job_record)
     A-->>C: 200 {job_id, status: "processing", quota}
 
@@ -76,7 +76,7 @@ sequenceDiagram
 
 Quota is stored durably in `quota_charges` table. On every `/validate` and `/submit` call:
 
-1. `db.charge_quota()` opens `BEGIN IMMEDIATE`.
+1. `db.charge_quota()` runs one `INSERT ... SELECT ... WHERE (SELECT COUNT(*) ...) < limit` statement (atomic on sqlite and rqlite).
 2. Counts existing charges for `user_id`.
 3. If `count >= limit` → `ROLLBACK` → raises `RuntimeError` → HTTP 429.
 4. Otherwise inserts charge row → `COMMIT`.

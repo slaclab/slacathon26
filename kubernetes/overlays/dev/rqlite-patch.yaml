@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rqlite
+  namespace: slacathon26
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - name: rqlite
+          args:
+            - -disco-mode=dns
+            - '-disco-config={"name":"rqlite-headless"}'
+            - -bootstrap-expect=1
+            - -join-interval=1s
+            - -join-attempts=120
+            - -auth=/rqlite/auth/auth.json
+            - -join-as=app
+            - -auto-backup=/rqlite/backup/backup.json
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rqlite
+  namespace: slacathon26
+spec:
+  minAvailable: 0

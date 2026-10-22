@@ -23,6 +23,8 @@ import time
 import pytest
 from unittest.mock import AsyncMock, patch
 
+from conftest import db_rows
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,13 +45,9 @@ def _register(client, email="alice@example.com", display_name="Alice"):
 
 
 def _get_token(tmp_db, email):
-    """Read verify_token straight from DB for the given email."""
-    import sqlite3
-    conn = sqlite3.connect(tmp_db)
-    conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
-    conn.close()
-    return dict(row) if row else None
+    """Read the user row (incl. verify_token) for the given email."""
+    from slacathon.db import get_user_by_email
+    return get_user_by_email(email)
 
 
 def _verify(client, token):
@@ -134,7 +132,6 @@ def test_register_replaces_unverified_pending(client, tmp_db):
 # ---------------------------------------------------------------------------
 
 def test_register_rolls_back_on_email_failure(client, tmp_db):
-    import sqlite3
     with patch("slacathon.main.send_verification_email", side_effect=Exception("SMTP down")):
         r = client.post(
             "/register",
@@ -142,10 +139,7 @@ def test_register_rolls_back_on_email_failure(client, tmp_db):
         )
     assert r.status_code == 503
     # Row must not persist
-    conn = sqlite3.connect(tmp_db)
-    row = conn.execute("SELECT * FROM users WHERE email = ?", ("frank@example.com",)).fetchone()
-    conn.close()
-    assert row is None
+    assert _get_token(tmp_db, "frank@example.com") is None
 
 
 # ---------------------------------------------------------------------------
@@ -174,16 +168,12 @@ def test_verify_invalid_token(client):
 
 
 def test_verify_expired_token(client, tmp_db):
-    import sqlite3
     _register(client, "grace@example.com")
     # Force expiry in the past
-    conn = sqlite3.connect(tmp_db)
-    conn.execute(
+    db_rows(
         "UPDATE users SET expires_at = ? WHERE email = ?",
         (time.time() - 1, "grace@example.com"),
     )
-    conn.commit()
-    conn.close()
     row = _get_token(tmp_db, "grace@example.com")
     r = _verify(client, row["verify_token"])
     assert r.status_code == 410
@@ -211,17 +201,12 @@ def test_verify_success_sends_api_key_email(client, tmp_db):
 
 
 def test_verify_marks_user_verified(client, tmp_db):
-    import sqlite3
     _register(client, "jack@example.com")
     row = _get_token(tmp_db, "jack@example.com")
     _verify(client, row["verify_token"])
-    conn = sqlite3.connect(tmp_db)
-    updated = conn.execute(
-        "SELECT verified, verify_token FROM users WHERE email = ?", ("jack@example.com",)
-    ).fetchone()
-    conn.close()
-    assert updated[0] == 1
-    assert updated[1] is None
+    updated = _get_token(tmp_db, "jack@example.com")
+    assert updated["verified"] == 1
+    assert updated["verify_token"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -280,17 +265,11 @@ def test_registered_page_renders(client):
 # ---------------------------------------------------------------------------
 
 def test_verified_api_key_accepted(client, tmp_db):
-    import sqlite3
     _register(client, "mike@example.com")
     row = _get_token(tmp_db, "mike@example.com")
     _verify(client, row["verify_token"])
     # Fetch the issued API key from DB
-    conn = sqlite3.connect(tmp_db)
-    updated = conn.execute(
-        "SELECT api_key FROM users WHERE email = ?", ("mike@example.com",)
-    ).fetchone()
-    conn.close()
-    api_key = updated[0]
+    api_key = _get_token(tmp_db, "mike@example.com")["api_key"]
     r = client.get("/history", headers={"X-API-Key": api_key})
     assert r.status_code == 200
 
@@ -301,15 +280,10 @@ def test_unknown_api_key_rejected(client):
 
 
 def test_unverified_user_key_rejected(client, tmp_db):
-    import sqlite3
     _register(client, "nina@example.com")
     # Row exists but verified=0; api_key is the row_id placeholder (not yet a real key)
-    conn = sqlite3.connect(tmp_db)
-    row = conn.execute(
-        "SELECT api_key FROM users WHERE email = ?", ("nina@example.com",)
-    ).fetchone()
-    conn.close()
-    r = client.get("/history", headers={"X-API-Key": row[0]})
+    row = _get_token(tmp_db, "nina@example.com")
+    r = client.get("/history", headers={"X-API-Key": row["api_key"]})
     assert r.status_code == 401
 
 
@@ -319,18 +293,14 @@ def test_unverified_user_key_rejected(client, tmp_db):
 
 def test_get_display_name_from_db(tmp_db):
     """get_display_name must reflect DB state without any in-process cache."""
-    import sqlite3
     from slacathon.middleware import get_display_name
 
     # Insert a user directly
     api_key = "test-display-key-999"
-    conn = sqlite3.connect(tmp_db)
-    conn.execute(
+    db_rows(
         "INSERT OR REPLACE INTO users (api_key, display_name, verified) VALUES (?, ?, 1)",
         (api_key, "DirectInsert"),
     )
-    conn.commit()
-    conn.close()
 
     # Should find it immediately (no restart, no cache warm-up)
     assert get_display_name(api_key) == "DirectInsert"

@@ -1,5 +1,10 @@
 # rqlite Database Backend
 
+> **Status (2026-10-22):** phases 1-3 implemented (app code, tests, compose profile, Kubernetes
+> rqlite cluster manifests). Remaining: phase 4 cutover (ConfigMap/Deployment switch + `/db/load`)
+> and phase 5 cleanup. The app Deployment still runs on the sqlite PVC until Vault holds
+> `rqlite-secrets` and the data load has been done.
+
 ## Context
 
 All persistent state (users, jobs, quota charges, leaderboard) lives in a single SQLite file managed by
@@ -170,8 +175,13 @@ return int(row["c"])
 ```
 
 On sqlite `_locked()` still serializes callers; on rqlite the Raft log serializes writes, so the
-statement is atomic cluster-wide. If pyrqlite's `rowcount` turns out not to be populated for
-`INSERT ... SELECT`, fall back to checking `cur.lastrowid`. The integration test (section 7) covers this.
+statement is atomic cluster-wide.
+
+**Finding during implementation:** rqlite does not return `rows_affected` for INSERT (pyrqlite
+`rowcount` is 0) and `last_insert_id` is the table's last id even when the conditional INSERT
+matched no row, so neither can signal success. The implemented version adds a
+`charge_token TEXT` column (unique index) to `quota_charges`, inserts a fresh `uuid4` per call,
+and confirms success with `SELECT 1 FROM quota_charges WHERE charge_token = ?`.
 
 #### 2d. Remaining SQL audit
 

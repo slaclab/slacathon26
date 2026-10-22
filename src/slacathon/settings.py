@@ -33,6 +33,15 @@ class Settings(BaseSettings):
     # File paths (resolved relative to repo root for cwd-independence; .env can override with relative or absolute)
     db_file: str = Field(default_factory=lambda: _data_file("data/slacathon.db"))
 
+    # Storage backend: "sqlite" (embedded file at db_file) or "rqlite" (HTTP cluster)
+    db_backend: str = Field(default="sqlite", description="Storage backend: sqlite | rqlite")
+    rqlite_scheme: str = Field(default="http")
+    rqlite_host: str = Field(default="localhost")
+    rqlite_port: int = Field(default=4001)
+    rqlite_user: str = Field(default="")
+    rqlite_password: str = Field(default="")
+    rqlite_timeout: float = Field(default=10.0, description="Seconds per rqlite HTTP request")
+
     # Limits
     max_queries_per_user: int = Field(default=10)
     max_validations_per_user: int = Field(default=10000)
@@ -61,6 +70,14 @@ class Settings(BaseSettings):
     @classmethod
     def validate_log_level(cls, v: str) -> str:
         return v.lower()
+
+    @field_validator("db_backend", mode="before")
+    @classmethod
+    def validate_db_backend(cls, v: str) -> str:
+        v = str(v).lower()
+        if v not in {"sqlite", "rqlite"}:
+            raise ValueError("db_backend must be 'sqlite' or 'rqlite'")
+        return v
 
 
 settings = Settings()

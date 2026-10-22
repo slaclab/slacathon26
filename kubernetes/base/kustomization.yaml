@@ -6,5 +6,8 @@ resources:
   - vault-secret.yaml
   - persistentvolumeclaim.yaml
   - service.yaml
+  - rqlite-vault-secret.yaml
+  - rqlite-service.yaml
+  - rqlite-statefulset.yaml
   - deployment.yaml
   - ingress.yaml

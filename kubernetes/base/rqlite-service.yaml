@@ -1,0 +1,38 @@
+# Headless service used by rqlite DNS discovery during bootstrap.
+# publishNotReadyAddresses is required: nodes must find each other before any is Ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rqlite-headless
+  namespace: slacathon26
+  labels:
+    app.kubernetes.io/name: rqlite
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: rqlite
+  ports:
+    - name: rqlite
+      port: 4001
+      targetPort: rqlite
+    - name: raft
+      port: 4002
+      targetPort: raft
+---
+# Client-facing service. pyrqlite follows leader redirects, so any ready node works.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rqlite
+  namespace: slacathon26
+  labels:
+    app.kubernetes.io/name: rqlite
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: rqlite
+  ports:
+    - name: rqlite
+      port: 4001
+      targetPort: rqlite

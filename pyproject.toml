@@ -19,7 +19,8 @@ dependencies = [
     "aiosmtplib>=3.0",
     "email-validator>=2.0",
     "jinja2>=3.1",
-    "requests>=2.28"
+    "requests>=2.28",
+    "pyrqlite>=2.2"
 ]
 
 [project.optional-dependencies]
@@ -39,6 +40,9 @@ notebooks = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "rqlite: integration tests that need a live rqlite node (set SLACATHON_RQLITE_HOST)",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

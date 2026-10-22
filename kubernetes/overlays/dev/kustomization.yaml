@@ -14,3 +14,4 @@ patches:
         path: /spec/rules/0/host
         value: ad-accel-online-ml-dev.slac.stanford.edu
   - path: secret-patch.yaml
+  - path: rqlite-patch.yaml
