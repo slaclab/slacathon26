@@ -1,8 +1,8 @@
 """
 Run the GP optimizer against a local server serving the injector task.
 
-Start the server first with the injector task active, e.g.:
-    ACTIVE_TASK=cuinj .venv/bin/uvicorn main:app --reload --port 8000
+Start the server first (all tasks are served at once), e.g.:
+    PYTHONPATH=src uvicorn slacathon.main:app --reload --port 8000
 
 The injector score is the combined transverse emittance in um (lower is better),
 so the platform's minimize convention applies directly. The task has no solved
@@ -21,7 +21,7 @@ API_KEY = os.getenv("API_KEY", "dev_key")
 BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 if __name__ == "__main__":
-    opt = GPOptimizer(api_key=API_KEY, base_url=BASE_URL)
+    opt = GPOptimizer(api_key=API_KEY, base_url=BASE_URL, public_task_id="cuinj")
 
     best_x, best_score, best_result = opt.optimize(
         n_iterations=50,

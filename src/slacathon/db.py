@@ -57,6 +57,7 @@ def init_db() -> None:
                 CREATE TABLE IF NOT EXISTS jobs (
                     job_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
+                    task_id TEXT NOT NULL DEFAULT '',
                     input_json TEXT NOT NULL,
                     status TEXT NOT NULL CHECK(status IN ('processing', 'completed')),
                     result_json TEXT,
@@ -70,6 +71,13 @@ def init_db() -> None:
                     charged_at REAL NOT NULL,
                     job_id TEXT,
                     kind TEXT DEFAULT 'validate'
+                );
+
+                CREATE TABLE IF NOT EXISTS tasks (
+                    task_id TEXT PRIMARY KEY,
+                    public_task_id TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    created_at REAL NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS leaderboard (
@@ -95,6 +103,7 @@ def init_db() -> None:
                 "ALTER TABLE users ADD COLUMN verify_token TEXT UNIQUE",
                 "ALTER TABLE users ADD COLUMN expires_at REAL",
                 "ALTER TABLE leaderboard ADD COLUMN task_name TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE jobs ADD COLUMN task_id TEXT NOT NULL DEFAULT ''",
             ]:
                 try:
                     conn.execute(alter)
@@ -286,13 +295,14 @@ def load_jobs() -> dict[str, dict]:
         conn = _connect()
         try:
             rows = conn.execute(
-                "SELECT job_id, user_id, input_json, status, result_json, created_at, completed_at FROM jobs"
+                "SELECT job_id, user_id, task_id, input_json, status, result_json, created_at, completed_at FROM jobs"
             ).fetchall()
             jobs: dict[str, dict] = {}
             for r in rows:
                 jobs[r["job_id"]] = {
                     "job_id": r["job_id"],
                     "user_id": r["user_id"],
+                    "task_id": r["task_id"],
                     "input": _json_loads(r["input_json"]),
                     "status": r["status"],
                     "result": _json_loads(r["result_json"]),
@@ -312,12 +322,13 @@ def insert_job(job: dict) -> None:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO jobs
-                (job_id, user_id, input_json, status, result_json, created_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (job_id, user_id, task_id, input_json, status, result_json, created_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job["job_id"],
                     job["user_id"],
+                    job.get("task_id", ""),
                     _json_dumps(job.get("input")),
                     job.get("status", "processing"),
                     _json_dumps(job.get("result")),
@@ -436,20 +447,43 @@ def charge_quota(
 # Leaderboard
 # -----------------------
 
-def get_all_leaderboard_entries(task_name: str) -> list[dict]:
-    """Return leaderboard rows for the given task, ordered by score ascending (caller re-sorts as needed)."""
+def sync_tasks(tasks: list[tuple[str, str, str]]) -> None:
+    """Register (task_id, public_task_id, name) rows at launch; idempotent.
+
+    Also re-keys legacy leaderboard/jobs rows that stored the public alias instead of task_id.
+    """
     with _lock:
         conn = _connect()
         try:
-            rows = conn.execute(
-                "SELECT id, user_id, input_json, score, solved, timestamp FROM leaderboard "
-                "WHERE task_name = ? ORDER BY score ASC",
-                (task_name,),
-            ).fetchall()
+            for task_id, public_task_id, name in tasks:
+                conn.execute(
+                    "INSERT INTO tasks (task_id, public_task_id, name, created_at) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(task_id) DO UPDATE SET name = excluded.name",
+                    (task_id, public_task_id, name, time.time()),
+                )
+                conn.execute("UPDATE leaderboard SET task_name = ? WHERE task_name = ?", (task_id, public_task_id))
+                conn.execute("UPDATE jobs SET task_id = ? WHERE task_id = ?", (task_id, public_task_id))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def get_all_leaderboard_entries(task_name: str | None = None) -> list[dict]:
+    """Return leaderboard rows for the given task (all tasks if None), ordered by score ascending."""
+    sql = "SELECT id, user_id, task_name, input_json, score, solved, timestamp FROM leaderboard"
+    params: tuple = ()
+    if task_name is not None:
+        sql += " WHERE task_name = ?"
+        params = (task_name,)
+    with _lock:
+        conn = _connect()
+        try:
+            rows = conn.execute(sql + " ORDER BY score ASC", params).fetchall()
             return [
                 {
                     "id": r["id"],
                     "user_id": r["user_id"],
+                    "task_name": r["task_name"],
                     "input": _json_loads(r["input_json"]),
                     "score": r["score"],
                     "solved": bool(r["solved"]),
@@ -516,7 +550,7 @@ def get_job(job_id: str) -> dict | None:
         conn = _connect()
         try:
             row = conn.execute(
-                "SELECT job_id, user_id, input_json, status, result_json, created_at, completed_at "
+                "SELECT job_id, user_id, task_id, input_json, status, result_json, created_at, completed_at "
                 "FROM jobs WHERE job_id = ?",
                 (job_id,)
             ).fetchone()
@@ -525,6 +559,7 @@ def get_job(job_id: str) -> dict | None:
             return {
                 "job_id": row["job_id"],
                 "user_id": row["user_id"],
+                "task_id": row["task_id"],
                 "input": _json_loads(row["input_json"]),
                 "status": row["status"],
                 "result": _json_loads(row["result_json"]),

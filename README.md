@@ -8,16 +8,16 @@
 - **v0.2 — Snowshoe** (upcoming)
 - **v0.3 — Mau** (future)
 
-Supports **pluggable tasks** via the `tasks/` directory. Switch the active task with the `SLACATHON_ACTIVE_TASK` environment variable (or in `.env`, defaults to `flat_beam`).
+Supports **multiple concurrent tasks** via the `tasks/` directory: every task module is discovered at startup and served under `/tasks/{public_task_id}` (`flat_beam`, `fel`, `cuinj`).
 
 Each task defines:
 - Input schema (Pydantic)
 - `TARGET`, `MINIMIZE` (for solved determination)
-- `FAILURE_SCORE`, `MAX_VALIDATIONS_PER_USER`
+- `FAILURE_SCORE`, `MAX_CONCURRENCY`
 
-- Discover full task info at `GET /task` (schema, labels, bounds, target, minimize, etc.)
-- Dynamic validation using per-task Pydantic models
-- Example: Beamline Guru (default)
+- List problems at `GET /tasks`; full task info at `GET /tasks/{public_task_id}` (schema, labels, bounds, target, minimize, etc.)
+- Input checked against per-task Pydantic models and bounds (HTTP 422 on bad input)
+- Leaderboard per task, filterable with `GET /leaderboard?public_task_id=...`
 
 See the live site and optimizer clients (in clients/) for usage examples.
 
@@ -194,19 +194,11 @@ Run on port 8000 so verification links (built from `SLACATHON_PUBLIC_URL`) resol
 PYTHONPATH=src uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-This starts the default `flat_beam` task. To run a different task, set `SLACATHON_ACTIVE_TASK`
-(see `src/slacathon/tasks/` for available modules: `flat_beam`, `fel`, `cuinj`).
+This serves every task in `src/slacathon/tasks/` (`flat_beam`, `fel`, `cuinj`) at once.
 
-**Run the dev server with the FEL task:**
-```bash
-SLACATHON_ACTIVE_TASK=fel PYTHONPATH=src \
-  uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
-```
-Or persist it in `.env`: `SLACATHON_ACTIVE_TASK=fel`, then run the plain command above.
+List them: `curl -s http://localhost:8000/slacathon26/tasks`.
 
-Confirm the active task: `curl -s http://localhost:8000/slacathon26/task` → `"name": "FEL Pulse Intensity"`.
-
-> **Note — `fel` and `cuinj` call a live SLAC model service.** Each `/validate` and `/submit`
+> **Note — `fel` and `cuinj` call a live SLAC model service.** Each `/tasks/{fel,cuinj}/submit`
 > posts to `https://ard-modeling-service.slac.stanford.edu/{fel,cuinj}/predict`, so these tasks
 > need network access to that host (SLAC network / VPN). If it's unreachable, submissions return
 > a service-error result with score `1e10` instead of failing the request. Override the endpoint
@@ -227,7 +219,7 @@ Confirm the active task: `curl -s http://localhost:8000/slacathon26/task` → `"
 ```
 cd clients && python optimize_fel.py
 ```
-It runs 50 GP iterations against `/validate`, then `submit_best_to_leaderboard` posts to `/submit`. View results at http://localhost:8000/slacathon26/board.
+It runs 50 GP iterations, each a `POST /tasks/flat_beam/submit` job, then re-submits the best point. View results at http://localhost:8000/slacathon26/board.
 
 ### 8. Spin down
 
@@ -264,7 +256,7 @@ SLACathon-v0.1-Tabby/
 │       ├── captcha.py        # Altcha PoW CAPTCHA
 │       ├── email_service.py  # async SMTP
 │       ├── job_manager.py
-│       ├── task_loader.py
+│       ├── registry.py       # discovers all task modules
 │       └── tasks/
 │           ├── __init__.py
 │           ├── base.py
@@ -311,7 +303,7 @@ SLACathon-v0.1-Tabby/
 **Key changes to project structure:**
 - `models.py` and `logic.py` removed (dead code cleaned)
 - New `settings.py` (pydantic-settings with `SLACATHON_` prefix) + `.env.example`
-- `task_loader.py` + `tasks/` package for pluggable challenges (tasks declare TARGET, MINIMIZE, MAX_VALIDATIONS_PER_USER, etc.)
+- `registry.py` + `tasks/` package for concurrent challenges (tasks declare TARGET, MINIMIZE, MAX_VALIDATIONS_PER_USER, etc.)
 - `job_manager.py` extracted (jobs + quota logic moved out of middleware)
 - Score is the raw optimization value from the task; TARGET + MINIMIZE only determine "solved"
 - Client examples moved to `clients/` (separate from server)
@@ -360,9 +352,9 @@ In the devcontainer these are pre-configured to use the bundled Mailpit service.
 
 ## Development
 
-To see the currently loaded task configuration:
+To see the loaded tasks:
 ```bash
-curl http://localhost:8000/slacathon26/task
+curl http://localhost:8000/slacathon26/tasks
 ```
 
 ### Storage & Migration
@@ -394,19 +386,9 @@ gunicorn -k uvicorn.workers.UvicornWorker -w 1 --timeout 300 \
 ```
 (or simply `./scripts/start.sh`)
 
-To switch tasks (pluggable system):
+All task modules are served at once; add one by dropping a module exposing `TASK = XxxProblem()` into `src/slacathon/tasks/` (see `docs/guides/writing-a-task.md`).
 
-```bash
-export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see src/slacathon/tasks/ dir)
-./scripts/start.sh
-```
-
-Or set it in `.env`:
-```env
-SLACATHON_ACTIVE_TASK=flat_beam
-```
-
-`GET /task` returns the current task's input schema, parameter labels, bounds, **target**, **minimize** direction, `failure_score`, and `max_validations_per_user`. Tasks define these values.
+`GET /tasks/{public_task_id}` returns a task's input schema, parameter labels, bounds, **target**, **minimize** direction, `failure_score`, and `max_validations_per_user`. Tasks define these values.
 
 ## Accessing the Application
 
@@ -417,21 +399,21 @@ The app is mounted under `/slacathon26` (FastAPI `root_path`).
 - **Get API Key:** `https://your-domain.com/slacathon26/resend-key`
 - **Leaderboard:** `https://your-domain.com/slacathon26/board`
 - **Team Page:** `https://your-domain.com/slacathon26/team`
-- **Task Info:** `GET https://your-domain.com/slacathon26/task` (schema + target/minimize/quotas)
-- **Validate (async job):** `POST https://your-domain.com/slacathon26/validate` (returns `job_id` + `quota`)
-- **Job result:** `GET /jobs/{job_id}` (includes `quota`)
-- **Submit to leaderboard:** `POST https://your-domain.com/slacathon26/submit`
-- **History / Leaderboard:** `GET /history`, `GET /leaderboard`
+- **Task list:** `GET https://your-domain.com/slacathon26/tasks`
+- **Task Info:** `GET https://your-domain.com/slacathon26/tasks/{public_task_id}` (schema + target/minimize)
+- **Job result:** `GET /jobs/{job_id}` (score, rank, `quota`)
+- **Submit (async job, checked + ranked):** `POST https://your-domain.com/slacathon26/tasks/{public_task_id}/submit` (returns `job_id`)
+- **History / Leaderboard:** `GET /history`, `GET /leaderboard[?public_task_id=...]`
 
-Use `X-API-Key` header for protected endpoints. API keys are issued after email verification via the registration flow. Quota limits (`MAX_VALIDATIONS_PER_USER`) and scoring rules come from the active task.
+Use `X-API-Key` header for protected endpoints. API keys are issued after email verification via the registration flow. Quota limits (`MAX_VALIDATIONS_PER_USER`) and scoring rules come from each task.
 
 ## Features
 
 - 🚀 FastAPI + Gunicorn
 - 📝 Self-serve user registration with email verification + Altcha CAPTCHA
 - 🔐 API key authentication + per-user quotas
-- 🔌 Pluggable tasks (`src/slacathon/tasks/*.py` + `SLACATHON_ACTIVE_TASK`)
-- 📊 Dynamic input schema (`GET /task`)
+- 🔌 Multiple concurrent tasks (`src/slacathon/tasks/*.py`, auto-discovered)
+- 📊 Dynamic input schema (`GET /tasks/{public_task_id}`)
 - 📈 Job-based validation + full history
 - 🏆 Leaderboard with duplicate detection
 - 🧪 Example optimizer clients: clients/gp_optimizer.py and clients/xopt_optimizer.py

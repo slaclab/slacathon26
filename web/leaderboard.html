@@ -148,6 +148,14 @@ body::after {
   width: 142px;
 }
 
+.task-filter select {
+  font-family: inherit;
+  color: #00ff00;
+  background: #000000;
+  border: 1px solid #00ff00;
+  padding: 2px 6px;
+}
+
 .loading, .empty {
   text-align: center;
   padding: 30px;
@@ -253,8 +261,11 @@ a.back:hover {
     </div>
 
     <div class="info-bar">
+      <div class="task-filter">PROBLEM:
+        <select id="task-select"><option value="">ALL PROBLEMS</option></select>
+      </div>
       <div>Entries: <span id="total-entries">0</span></div>
-      <div>TARGET: <span style="color:#00ffff">SCORE &lt; 0.001</span></div>
+      <div>TARGET: <span id="target-info" style="color:#00ffff">—</span></div>
       <div>LAST SYNC: <span id="last-update">—</span></div>
     </div>
 
@@ -262,6 +273,7 @@ a.back:hover {
       <thead>
         <tr>
           <th>RANK</th>
+          <th id="task-header">PROBLEM</th>
           <th>USER</th>
           <th>SCORE</th>
           <th>SOLVED</th>
@@ -270,7 +282,7 @@ a.back:hover {
         </tr>
       </thead>
       <tbody id="leaderboard-body">
-        <tr><td colspan="6" class="loading">ACCESSING ARCHIVE...</td></tr>
+        <tr><td colspan="7" class="loading">ACCESSING ARCHIVE...</td></tr>
       </tbody>
     </table>
 
@@ -295,7 +307,7 @@ a.back:hover {
       });
     }
 
-    function formatInput(inp) {
+    function formatInput(inp, currentLabels) {
       if (!inp) return '—';
       if (typeof inp === 'object') {
         if (currentLabels && currentLabels.length) {
@@ -313,11 +325,59 @@ a.back:hover {
       return String(inp);
     }
 
-    let currentLabels = null;
+    const BASE = window.location.pathname.replace(/\/board\/?$/, '');
+    const STORAGE_KEY = 'slacathon.board.public_task_id';
+    let tasks = {};          // public_task_id -> metadata from GET /tasks
+    let selectedTask = '';   // '' = all problems
+
+    function escapeHtml(v) {
+      return String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function updateHeader() {
+      const task = tasks[selectedTask];
+      document.getElementById('task-header').style.display = task ? 'none' : '';
+      const header = document.getElementById('input-header');
+      header.textContent = (task && task.parameter_labels && task.parameter_labels.length)
+        ? 'INPUT [' + task.parameter_labels.join(', ') + ']' : 'INPUT';
+      document.getElementById('target-info').textContent = task
+        ? 'SCORE ' + (task.minimize ? '≤ ' : '≥ ') + task.target
+        : 'PER PROBLEM';
+    }
+
+    async function loadTasks() {
+      try {
+        const res = await fetch(BASE + '/tasks');
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = document.getElementById('task-select');
+        (data.tasks || []).forEach(t => {
+          tasks[t.public_task_id] = t;
+          const opt = document.createElement('option');
+          opt.value = t.public_task_id;
+          opt.textContent = t.name + ' (' + t.public_task_id + ')';
+          select.appendChild(opt);
+        });
+        let initial = new URLSearchParams(window.location.search).get('public_task_id');
+        if (initial === null) {
+          try { initial = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+        }
+        selectedTask = (initial && tasks[initial]) ? initial : '';
+        select.value = selectedTask;
+        select.addEventListener('change', () => {
+          selectedTask = select.value;
+          try { localStorage.setItem(STORAGE_KEY, selectedTask); } catch (e) {}
+          updateHeader();
+          fetchLeaderboard();
+        });
+      } catch (e) {}
+      updateHeader();
+    }
 
     async function fetchLeaderboard() {
       try {
-        const res = await fetch('/slacathon26/leaderboard');
+        const query = selectedTask ? '?public_task_id=' + encodeURIComponent(selectedTask) : '';
+        const res = await fetch(BASE + '/leaderboard' + query);
         if (!res.ok) throw new Error('bad status');
         const data = await res.json();
 
@@ -328,12 +388,17 @@ a.back:hover {
         tbody.innerHTML = '';
 
         if (!data.leaderboard || data.leaderboard.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="empty">NO ENTRIES IN THE ARCHIVE — BE THE FIRST TO TUNE</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="empty">NO ENTRIES IN THE ARCHIVE — BE THE FIRST TO TUNE</td></tr>';
           return;
         }
 
-        data.leaderboard.forEach((entry, idx) => {
-          const rank = idx + 1;
+        let rank = 0;
+        let prevTask = null;
+        data.leaderboard.forEach((entry) => {
+          // ranks restart for each problem in the all-problems view
+          if (entry.public_task_id !== prevTask) { rank = 0; prevTask = entry.public_task_id; }
+          rank += 1;
+          const task = tasks[entry.public_task_id];
           let rankDisplay = rank;
           let rankClass = '';
           if (rank === 1) { rankDisplay = '★ ' + rank; rankClass = 'rank-1'; }
@@ -347,10 +412,11 @@ a.back:hover {
           const row = document.createElement('tr');
           row.innerHTML = `
             <td class="rank ${rankClass}">${rankDisplay}</td>
-            <td class="user">${entry.user || 'anonymous'}</td>
+            ${selectedTask ? '' : `<td class="task">${escapeHtml(task ? task.name : entry.public_task_id)}</td>`}
+            <td class="user">${escapeHtml(entry.user || 'anonymous')}</td>
             <td class="score">${Number(entry.score).toFixed(6)}</td>
             <td class="solved">${solvedHtml}</td>
-            <td class="input">${formatInput(entry.input)}</td>
+            <td class="input">${escapeHtml(formatInput(entry.input, task && task.parameter_labels))}</td>
             <td class="timestamp">${formatTimestamp(entry.timestamp)}</td>
           `;
           tbody.appendChild(row);
@@ -359,33 +425,14 @@ a.back:hover {
         const tbody = document.getElementById('leaderboard-body');
         let msg = 'ARCHIVE ERROR';
         if (err.message) msg += ' [' + err.message + ']';
-        tbody.innerHTML = `<tr><td colspan="6" class="empty" style="color:#ff6666">${msg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="empty" style="color:#ff6666">${msg}</td></tr>`;
         console.error('Leaderboard fetch failed:', err);
       }
     }
 
-    // Initial load
-    fetchLeaderboard();
-
-    // Auto-refresh every 5 seconds
+    // Initial load, then auto-refresh every 5 seconds
+    loadTasks().then(fetchLeaderboard);
     setInterval(fetchLeaderboard, 5000);
-
-    // Fetch task info for dynamic labels
-    async function updateInputHeader() {
-      try {
-        const res = await fetch('/slacathon26/task');
-        if (res.ok) {
-          const task = await res.json();
-          currentLabels = task.parameter_labels || null;
-          const header = document.getElementById('input-header');
-          if (header && currentLabels && currentLabels.length) {
-            header.textContent = 'INPUT [' + currentLabels.join(', ') + ']';
-          }
-          fetchLeaderboard();
-        }
-      } catch (e) {}
-    }
-    updateInputHeader();
 
     // Konami code easter egg
     const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];

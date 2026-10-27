@@ -11,7 +11,6 @@ cp .env.example .env
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
-| `SLACATHON_ACTIVE_TASK` | `flat_beam` | No | Task module to load (`flat_beam`, `fel`, `cuinj`) |
 | `SLACATHON_ROOT_PATH` | `/slacathon26` | No | FastAPI `root_path` mount prefix |
 | `SLACATHON_HOST` | `127.0.0.1` | No | Bind address (Gunicorn) |
 | `SLACATHON_PORT` | `8888` | No | Bind port (Gunicorn) |

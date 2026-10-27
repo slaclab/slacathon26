@@ -64,7 +64,6 @@ kubernetes/
 
 | Key | Value |
 |---|---|
-| `SLACATHON_ACTIVE_TASK` | `flat_beam` |
 | `SLACATHON_ROOT_PATH` | `/slacathon26` |
 | `SLACATHON_DB_FILE` | `/app/data/slacathon.db` |
 | `SLACATHON_LEADERBOARD_FILE` | `/app/data/leaderboard.json` |

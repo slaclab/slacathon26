@@ -7,7 +7,7 @@ SLACathon uses static bearer tokens delivered via the `X-API-Key` HTTP header. K
 Protected endpoints:
 
 ```
-POST /validate
+POST /tasks/{public_task_id}/submit
 GET  /jobs/{job_id}
 POST /submit
 GET  /history

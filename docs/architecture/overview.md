@@ -48,7 +48,7 @@ graph TD
 
 **Atomic quota enforcement.** `db.charge_quota()` uses `BEGIN IMMEDIATE` to prevent TOCTOU races — the check and insert happen in a single transaction.
 
-**Pluggable tasks.** Tasks are plain Python modules discovered by `task_loader.py` at startup. Switching tasks requires only an environment variable change (`SLACATHON_ACTIVE_TASK`).
+**Pluggable tasks.** Every module in `tasks/` is discovered by `registry.py` at startup and served at once under `/tasks/{public_task_id}`; the leaderboard is kept per task.
 
 **Leaderboard as flat JSON.** The top-15 leaderboard is intentionally simple plain JSON, written atomically via `os.replace()`. Jobs and users live in SQLite.
 

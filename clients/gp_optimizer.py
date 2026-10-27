@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class GPOptimizer:
-    def __init__(self, api_key: str, base_url: str):
+    def __init__(self, api_key: str, base_url: str, public_task_id: str = "flat_beam"):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
+        self.public_task_id = public_task_id
 
         self.session = requests.Session()
         self.session.headers.update({
@@ -22,7 +23,7 @@ class GPOptimizer:
             "Content-Type": "application/json"
         })
 
-        self.task_info = self._request("GET", "/task")
+        self.task_info = self._request("GET", f"/tasks/{self.public_task_id}")
         self.input_labels = self.task_info.get("parameter_labels") or ["x1", "x2", "x3", "x4", "x5"]
         self.dim = len(self.input_labels)
         self.bounds = self.task_info.get("bounds") or [(-10.0, 10.0)] * self.dim
@@ -68,7 +69,7 @@ class GPOptimizer:
         input_dict = {label: float(val) for label, val in zip(self.input_labels, x)}
         logger.info(f"Querying with input: {input_dict}")
 
-        job = self._request("POST", "/validate", json={"input": input_dict})
+        job = self._request("POST", f"/tasks/{self.public_task_id}/submit", json={"input": input_dict})
         job_id = job.get("job_id")
         if not job_id:
             logger.error("Failed to create validation job")
@@ -84,7 +85,9 @@ class GPOptimizer:
 
     def submit_to_leaderboard(self, x: np.ndarray) -> dict:
         input_dict = {label: float(val) for label, val in zip(self.input_labels, x)}
-        result = self._request("POST", "/submit", json={"input": input_dict}, timeout=15)
+        # Every submission is evaluated as a job and recorded on the task leaderboard
+        job = self._request("POST", f"/tasks/{self.public_task_id}/submit", json={"input": input_dict})
+        result = self._wait_for_job(job["job_id"]) if job.get("job_id") else {}
         if result:
             logger.info(f"Leaderboard submit → rank {result.get('rank')}/{result.get('leaderboard_size')}")
         return result

@@ -53,7 +53,7 @@ src/slacathon/
 ├── middleware.py     # API key auth, leaderboard logic
 ├── captcha.py        # Altcha PoW challenge/verify
 ├── email_service.py  # async SMTP send helpers
-├── task_loader.py    # loads SLACATHON_ACTIVE_TASK module
+├── registry.py       # discovers all task modules
 └── tasks/
     ├── base.py       # Task protocol + base models
     ├── flat_beam.py  # default task (local, no network)
@@ -79,4 +79,4 @@ rm -f data/slacathon.db data/leaderboard.json
 
 ## Hot Reload
 
-`--reload` flag watches `src/` for changes. Task modules are loaded once at startup (`TASK = load_active_task()`); changing a task file requires a server restart.
+`--reload` flag watches `src/` for changes. Task modules are loaded once at startup (`registry.get_registry()`); changing a task file requires a server restart.

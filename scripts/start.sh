@@ -2,8 +2,7 @@
 #
 # SLACATHON 2026 backend launcher
 #
-# To switch task logic:
-#   export SLACATHON_ACTIVE_TASK=flat_beam   # or fel, mars, etc. (see src/slacathon/tasks/ dir)
+# All tasks in src/slacathon/tasks/ are served at once (GET /tasks lists them).
 #
 
 set -e
@@ -21,8 +20,7 @@ if [ -f .env ]; then
     echo "Loaded environment from .env"
 fi
 
-# Switch tasks: export SLACATHON_ACTIVE_TASK=flat_beam  (or fel/mars)
-# See src/slacathon/tasks/ and GET /task for schema.
+# See src/slacathon/tasks/ and GET /tasks/{task_id} for schema.
 
 # Activate virtualenv and start the server (relocatable)
 source "$ROOT/venv/bin/activate"

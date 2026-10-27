@@ -15,7 +15,8 @@ from .db import (
     trim_leaderboard,
 )
 
-from .task_loader import load_active_task
+from .registry import list_tasks
+from .tasks.base import Problem
 # Note: job_manager is imported elsewhere (main.py) which ensures jobs + quota state are initialized.
 
 
@@ -54,18 +55,9 @@ user_tracker = UserSubmissionTracker(MAX_QUERIES_PER_USER)
 _leaderboard_lock = threading.RLock()
 
 
-def _get_task_info():
-    try:
-        task = load_active_task()
-        minimize = getattr(task, "MINIMIZE", True)
-    except Exception:
-        minimize = True
-    return settings.active_task, minimize
-
-
-def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
+def add_to_leaderboard(user_id: str, problem: Problem, input: dict, score: float, solved: bool):
     with _leaderboard_lock:
-        task_name, minimize = _get_task_info()
+        task_name, minimize = problem.task_id, problem.MINIMIZE
 
         if input_exists_in_leaderboard(task_name, input):
             logger.info(f"Duplicate solution submitted by {get_display_name(user_id)}, ignoring.")
@@ -89,13 +81,12 @@ def add_to_leaderboard(user_id: str, input: dict, score: float, solved: bool):
     return rank
 
 
-def get_leaderboard() -> List[dict]:
-    task_name, minimize = _get_task_info()
-
-    entries = get_all_leaderboard_entries(task_name)
-    entries.sort(key=lambda x: x["score"], reverse=not minimize)
+def _task_leaderboard(problem: Problem) -> List[dict]:
+    entries = get_all_leaderboard_entries(problem.task_id)
+    entries.sort(key=lambda x: x["score"], reverse=not problem.MINIMIZE)
     return [
         {
+            "public_task_id": problem.public_task_id,
             "user": get_display_name(e["user_id"]),
             "input": e["input"],
             "score": e["score"],
@@ -104,6 +95,16 @@ def get_leaderboard() -> List[dict]:
         }
         for e in entries
     ]
+
+
+def get_leaderboard(problem: Problem | None = None) -> List[dict]:
+    """Leaderboard for one task, or all tasks concatenated (each sorted by its own direction)."""
+    if problem is not None:
+        return _task_leaderboard(problem)
+    board: List[dict] = []
+    for p in list_tasks():
+        board.extend(_task_leaderboard(p))
+    return board
 
 async def verify_api_key(x_api_key: str = Header(...)) -> str:
     if x_api_key not in db_get_valid_api_keys():

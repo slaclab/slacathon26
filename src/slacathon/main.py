@@ -5,7 +5,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends, Body, Request
+from fastapi import FastAPI, HTTPException, Depends, Body, Request, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -13,7 +13,8 @@ from pydantic import BaseModel, EmailStr
 
 from .captcha import create_challenge, verify_captcha
 from .email_service import send_verification_email, send_api_key_email
-from .task_loader import load_active_task
+from .registry import get_registry, get_task, get_task_by_id
+from .tasks.base import InputValidationError, Problem
 from .middleware import (
     verify_api_key,
     get_tracker,
@@ -27,7 +28,6 @@ from .job_manager import (
     get_job,
     complete_job,
     make_json_safe,
-    charge_validation_quota,
     get_quota_info,
 )
 from .settings import settings
@@ -60,8 +60,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(root_path=settings.root_path, lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(_WEB_ROOT / "static")), name="static")
 
-TASK = load_active_task()
-logger.info(f"Loaded task: {getattr(TASK, 'TASK_NAME', 'Unknown')}")
+logger.info(f"Loaded tasks: {', '.join(get_registry())}")
 
 landing_page_html = (Path(__file__).resolve().parent.parent.parent / "web/index.html").read_text()
 leaderboard_page_html = (Path(__file__).resolve().parent.parent.parent / "web/leaderboard.html").read_text()
@@ -205,6 +204,23 @@ def _extract_input_data(body: dict) -> dict:
     return body
 
 
+def task_dep(public_task_id: str) -> Problem:
+    """Path dependency resolving {public_task_id} to its Problem; 404 if unknown."""
+    try:
+        return get_task(public_task_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown task '{public_task_id}'")
+
+
+def _check_or_422(problem: Problem, body: dict) -> tuple[dict, object]:
+    """Extract input from body and validate it against the task; 422 on bad input."""
+    input_data = _extract_input_data(body)
+    try:
+        return input_data, problem.check_input(input_data)
+    except InputValidationError as e:
+        raise HTTPException(status_code=422, detail=e.errors)
+
+
 @app.get("/")
 async def root():
     logger.info("Root endpoint accessed")
@@ -221,19 +237,14 @@ async def health():
     return {"status": "rockin' and rollin'"}
 
 
-@app.get("/task")
-async def get_task_info():
-    return {
-        "name": getattr(TASK, "TASK_NAME", "Unknown Task"),
-        "input_schema": TASK.Input.model_json_schema(),
-        "result_schema": TASK.Result.model_json_schema(),
-        "parameter_labels": getattr(TASK, "INPUT_LABELS", None),
-        "bounds": getattr(TASK, "BOUNDS", None),
-        "target": getattr(TASK, "TARGET", None),
-        "minimize": getattr(TASK, "MINIMIZE", None),
-        "failure_score": getattr(TASK, "FAILURE_SCORE", None),
-        "max_validations_per_user": getattr(TASK, "MAX_VALIDATIONS_PER_USER", None),
-    }
+@app.get("/tasks")
+async def list_tasks_info():
+    return {"tasks": [p.metadata() for p in get_registry().values()]}
+
+
+@app.get("/tasks/{public_task_id}")
+async def get_task_info(problem: Problem = Depends(task_dep)):
+    return problem.metadata()
 
 @app.get("/team")
 async def team_page():
@@ -266,118 +277,77 @@ async def get_history(
     }
 
 @app.get("/leaderboard")
-async def view_leaderboard():
-    logger.info("Leaderboard API request received")
-    board = get_leaderboard()
-    
+async def view_leaderboard(public_task_id: str | None = Query(default=None)):
+    logger.info(f"Leaderboard API request received (public_task_id={public_task_id})")
+    problem = task_dep(public_task_id) if public_task_id is not None else None
+    board = get_leaderboard(problem)
+
     return {
         "total_entries": len(board),
-        "leaderboard": board
+        "leaderboard": board,
+        "tasks": {
+            p.public_task_id: {"name": p.TASK_NAME, "target": p.TARGET, "minimize": p.MINIMIZE}
+            for p in get_registry().values()
+        },
     }
 
-@app.post("/submit")
-async def submit_result(
-    body: dict = Body(...),
-    api_key: str = Depends(verify_api_key)
-):
-    input_data = _extract_input_data(body)
-    logger.info(f"Leaderboard submission from user: {get_display_name(api_key)}")
-    logger.info(f"Submitted input: {input_data}")
-    
+async def run_submission_job(problem: Problem, job_id: str, api_key: str, input_data: dict, validated_input):
+    """Background job: evaluate the input, record it on the task leaderboard, store the result."""
     try:
-        # charge via single primitive: minimal record for submit path (persisted, counted on restart)
-        charge_validation_quota(
-            api_key,
-            record={"user_id": api_key, "kind": "submit", "created_at": time.time()}
-        )
-
-        validated_input = TASK.Input(**input_data)
-        result = TASK.validate(validated_input).model_dump()
-        logger.info(f"Evaluation result: {result}")
-        
-        rank = add_to_leaderboard(
-            user_id=api_key,
-            input=input_data,
-            score=result['score'],
-            solved=result['solved']
-        )
-        
-        board = get_leaderboard()
-        display_name = get_display_name(api_key)
-        
-        return {
-            "submitted": True,
-            "user": display_name,
-            "score": result['score'],
-            "solved": result['solved'],
-            "message": result['message'],
-            "rank": rank,
-            "leaderboard_size": len(board)
-        }
-        
-    except RuntimeError as e:
-        raise HTTPException(status_code=429, detail=str(e))
-    except Exception as e:
-        logger.error(f"Submission error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error while processing submission")
-
-async def run_validation_job(job_id: str, input_data: dict):
-    try:
-        logger.info(f"Background job {job_id} starting heavy validation...")
+        logger.info(f"Submission job {job_id} ({problem.public_task_id}) starting evaluation...")
         loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, lambda d: TASK.validate(d).model_dump(), input_data)
-        logger.info(f"Background job {job_id} computation done, applying delay...")
+        result = make_json_safe((await loop.run_in_executor(None, problem.run, validated_input)).model_dump())
+        logger.info(f"Submission job {job_id} computation done, applying delay...")
 
         await asyncio.sleep(1.0)
 
+        result["rank"] = add_to_leaderboard(
+            user_id=api_key,
+            problem=problem,
+            input=input_data,
+            score=result["score"],
+            solved=result["solved"],
+        )
+        result["leaderboard_size"] = len(get_leaderboard(problem))
         complete_job(job_id, result)
-        logger.info(f"Background job {job_id} finished and result stored.")
+        logger.info(f"Submission job {job_id} finished and result stored.")
     except Exception as e:
-        logger.error(f"Background job {job_id} failed: {e}", exc_info=True)
-        job = get_job(job_id)
-        if job:
-            complete_job(job_id, {
-                "solved": False,
-                "score": getattr(TASK, "FAILURE_SCORE", 1.0e10),
-                "message": f"Job failed: {str(e)}",
-                "evaltime": 0.0
-            })
+        logger.error(f"Submission job {job_id} failed: {e}", exc_info=True)
+        if get_job(job_id):
+            complete_job(job_id, problem.failure_result(f"Job failed: {str(e)}"))
 
-@app.post("/validate")
-async def validate(
+@app.post("/tasks/{public_task_id}/submit")
+async def submit(
     body: dict = Body(...),
+    problem: Problem = Depends(task_dep),
     api_key: str = Depends(verify_api_key),
     tracker: UserSubmissionTracker = Depends(get_tracker)
 ):
-    input_data = _extract_input_data(body)
-    logger.info(f"Validation job request received from user: {get_display_name(api_key)}")
+    input_data, validated_input = _check_or_422(problem, body)
+    logger.info(f"Submission on {problem.public_task_id} from user: {get_display_name(api_key)}")
     logger.info(f"Submitted input: {input_data}")
 
     try:
-        if isinstance(input_data, dict):
-            TASK.Input(**input_data)
+        tracker.add_submission(api_key, {"public_task_id": problem.public_task_id, "input": input_data})
 
-        tracker.add_submission(api_key, input_data)
+        job_id = create_job(api_key, problem.task_id, input_data)
 
-        job_id = create_job(api_key, input_data)
+        asyncio.create_task(run_submission_job(problem, job_id, api_key, input_data, validated_input))
 
-        asyncio.create_task(run_validation_job(job_id, input_data))
-
-        logger.info(f"Validation job {job_id} enqueued for user {get_display_name(api_key)}")
+        logger.info(f"Submission job {job_id} enqueued for user {get_display_name(api_key)}")
 
         return {
             "job_id": job_id,
+            "public_task_id": problem.public_task_id,
             "status": "processing",
-            "message": "Submission recorded. Validation is running in the background (this can take time). Poll GET /jobs/{job_id} to retrieve the result when ready.",
+            "message": "Submission recorded. Evaluation is running in the background. Poll GET /jobs/{job_id} for the score and leaderboard rank.",
             "quota": get_quota_info(api_key)
         }
     except RuntimeError as e:
         raise HTTPException(status_code=429, detail=str(e))
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Validation job creation error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to start validation job")
+        logger.error(f"Submission job creation error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to start submission job")
 
 
 @app.get("/jobs/{job_id}")
@@ -394,6 +364,7 @@ async def get_job_status(
 
     response = {
         "job_id": job["job_id"],
+        "public_task_id": getattr(get_task_by_id(job.get("task_id", "")), "public_task_id", None),
         "status": job["status"],
         "created_at": job["created_at"],
         "input": job.get("input"),

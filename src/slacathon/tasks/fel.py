@@ -3,7 +3,7 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 
-from .base import TaskInput, TaskResult
+from .base import Problem, TaskInput, TaskResult
 
 
 FEL_URL = os.getenv("FEL_URL", "https://ard-modeling-service.slac.stanford.edu/fel")
@@ -72,3 +72,22 @@ def validate(data: Input) -> Result:
         message=f"hxr_pulse_intensity is {intensity} mJ (solved at 4 mJ)",
         evaltime=dt
     )
+
+
+class FelProblem(Problem):
+    TASK_NAME = TASK_NAME
+    INPUT_LABELS = INPUT_LABELS
+    BOUNDS = BOUNDS
+    TARGET = TARGET
+    MINIMIZE = MINIMIZE
+    FAILURE_SCORE = FAILURE_SCORE
+    MAX_VALIDATIONS_PER_USER = MAX_VALIDATIONS_PER_USER
+    MAX_CONCURRENCY = 4  # HTTP-bound
+    Input = Input
+    Result = Result
+
+    def run(self, data: Input) -> Result:
+        return validate(data)
+
+
+TASK = FelProblem()

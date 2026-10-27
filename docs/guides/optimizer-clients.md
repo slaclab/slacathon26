@@ -29,7 +29,7 @@ pip install xopt numpy requests
 
 - **Exploration phase** — random sampling for the first N iterations
 - **Exploitation phase** — GP + Lower Confidence Bound (LCB) acquisition function
-- Automatic task discovery via `GET /task` (reads `parameter_labels` and `bounds`)
+- Automatic task discovery via `GET /tasks/{public_task_id}` (reads `parameter_labels` and `bounds`)
 
 ### Basic Usage
 
@@ -56,14 +56,14 @@ optimizer.submit_best_to_leaderboard(best_x)
 | Method | Description |
 |---|---|
 | `optimize(n_iterations, target_score, exploration_iterations)` | Run full optimization loop |
-| `query_objective(x)` | POST to `/validate`, poll job, return `(score, result)` |
+| `query_objective(x)` | POST to `/tasks/{public_task_id}/submit`, poll job, return `(score, result)` |
 | `submit_to_leaderboard(x)` | POST to `/submit` |
 | `view_leaderboard()` | GET `/leaderboard` |
 | `get_history()` | GET `/history` |
 
 ### Validation Flow
 
-`query_objective` calls `POST /validate` (async job) then polls `GET /jobs/{id}` until `status == "completed"`. This respects the server's async job model and avoids blocking the server.
+`query_objective` calls `POST /tasks/{public_task_id}/submit` (async job) then polls `GET /jobs/{id}` until `status == "completed"`. This respects the server's async job model and avoids blocking the server.
 
 ## Xopt Optimizer
 
@@ -85,4 +85,4 @@ jupyter notebook notebooks/
 
 ## Task Discovery
 
-All clients call `GET /task` at startup to read `parameter_labels` and `bounds`. No hardcoded parameters — the same client works for `flat_beam`, `fel`, or `cuinj` without modification.
+All clients call `GET /tasks/{public_task_id}` at startup to read `parameter_labels` and `bounds`. No hardcoded parameters — the same client works for `flat_beam`, `fel`, or `cuinj` without modification.

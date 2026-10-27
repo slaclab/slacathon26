@@ -20,9 +20,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Task configuration
-    active_task: str = Field(default="flat_beam", description="Active task module name")
-
     # Server settings
     host: str = Field(default="127.0.0.1")
     port: int = Field(default=8888)

@@ -105,7 +105,6 @@ kubernetes/
 
 | Key | Default | Purpose |
 |---|---|---|
-| `SLACATHON_ACTIVE_TASK` | `flat_beam` | Active challenge task |
 | `SLACATHON_ROOT_PATH` | `/slacathon26` | FastAPI root path |
 | `SLACATHON_DB_FILE` | `/app/data/slacathon.db` | SQLite path on PVC |
 | `SLACATHON_LEADERBOARD_FILE` | `/app/data/leaderboard.json` | Leaderboard JSON on PVC |
