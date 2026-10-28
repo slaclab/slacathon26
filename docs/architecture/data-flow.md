@@ -37,9 +37,9 @@ sequenceDiagram
     participant TP as Thread Pool
     participant T as Task Module
 
-    C->>A: POST /validate {input: {...}}\n X-API-Key: <key>
+    C->>A: POST /tasks/{public_task_id}/submit {input: {...}}\n X-API-Key: <key>
     A->>DB: verify API key
-    A->>A: validate input schema (TASK.Input)
+    A->>A: check_input: schema + bounds (422 on error)
     A->>DB: charge_quota() [atomic BEGIN IMMEDIATE]
     A->>DB: insert_job(job_record)
     A-->>C: 200 {job_id, status: "processing", quota}
@@ -74,7 +74,7 @@ sequenceDiagram
 
 ## Quota Enforcement
 
-Quota is stored durably in `quota_charges` table. On every `/validate` and `/submit` call:
+Quota is stored durably in `quota_charges` table. On every `/tasks/{public_task_id}/submit` call:
 
 1. `db.charge_quota()` opens `BEGIN IMMEDIATE`.
 2. Counts existing charges for `user_id`.

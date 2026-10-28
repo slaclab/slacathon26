@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 
 - `src/slacathon/` contains the FastAPI application, settings, SQLite storage,
-  email service, middleware, job manager, and task loader.
+  email service, middleware, job manager, and task registry.
 - `src/slacathon/tasks/` contains pluggable optimization tasks and task data.
 - `web/` contains HTML/Jinja templates and static assets.
 - `tests/` contains pytest tests for registration, authentication, quotas,

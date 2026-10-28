@@ -27,7 +27,7 @@ Open `http://localhost:8025`, click the verification link, solve CAPTCHA. A seco
 ## Step 3 — Check the task
 
 ```bash
-curl -s http://localhost:8000/slacathon26/task | python -m json.tool
+curl -s http://localhost:8000/slacathon26/tasks | python -m json.tool
 ```
 
 Note `parameter_labels`, `bounds`, `target`, and `minimize`.
@@ -37,7 +37,7 @@ Note `parameter_labels`, `bounds`, `target`, and `minimize`.
 ```bash
 API_KEY="your-api-key-here"
 
-JOB=$(curl -s -X POST http://localhost:8000/slacathon26/validate \
+JOB=$(curl -s -X POST http://localhost:8000/slacathon26/tasks/flat_beam/submit \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"input": {"q1": 0, "q2": 0, "q3": 0, "d2": 0, "d3": 0}}')

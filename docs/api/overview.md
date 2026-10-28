@@ -27,8 +27,8 @@ REST over HTTP/1.1. No versioning prefix in URLs — the app is versioned by con
 | Group | Prefix | Auth required |
 |---|---|---|
 | Registration | `/register`, `/verify`, `/resend-key` | No |
-| Task metadata | `/task` | No |
-| Validation jobs | `/validate`, `/jobs/{id}` | Yes |
+| Task list / metadata | `/tasks`, `/tasks/{public_task_id}` | No |
+| Submission jobs | `/tasks/{public_task_id}/submit`, `/jobs/{id}` | Yes |
 | Leaderboard submit | `/submit` | Yes |
 | Leaderboard view | `/leaderboard` | No |
 | History | `/history` | Yes |

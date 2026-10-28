@@ -60,12 +60,7 @@ PYTHONPATH=src uvicorn slacathon.main:app \
   --host 127.0.0.1 --port 8000 --reload
 ```
 
-For a non-default task:
-
-```bash
-SLACATHON_ACTIVE_TASK=fel PYTHONPATH=src \
-  uvicorn slacathon.main:app --host 127.0.0.1 --port 8000 --reload
-```
+All tasks in `src/slacathon/tasks/` are served at once; list them with `GET /tasks`.
 
 See [Configuration](configuration.md) for all environment variables.
 

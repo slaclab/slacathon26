@@ -3,12 +3,13 @@ import time
 
 API_KEY = "YOUR_API_KEY_FROM_VERIFICATION_EMAIL"
 BASE_URL = "https://halavanau.group/slacathon26"
+PUBLIC_TASK_ID = "flat_beam"  # see GET /tasks for all problems
 
 headers = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
 
 def run_validation(params, poll_interval=2):
     inp = {"q1": params[0], "q2": params[1], "q3": params[2], "d2": params[3], "d3": params[4]}
-    r = requests.post(f"{BASE_URL}/validate", headers=headers, json={"input": inp})
+    r = requests.post(f"{BASE_URL}/tasks/{PUBLIC_TASK_ID}/submit", headers=headers, json={"input": inp})
     r.raise_for_status()
     job = r.json()
     job_id = job["job_id"]

@@ -50,12 +50,13 @@ def get_job(job_id: str) -> dict | None:
     return None
 
 
-def create_job(user_id: str, input_data: dict) -> str:
+def create_job(user_id: str, task_id: str, input_data: dict) -> str:
     """Build job record, charge quota (durable), persist to DB and memory."""
     job_id = str(uuid.uuid4())
     job_record = {
         "job_id": job_id,
         "user_id": user_id,
+        "task_id": task_id,
         "input": input_data,
         "status": "processing",
         "result": None,
@@ -66,7 +67,7 @@ def create_job(user_id: str, input_data: dict) -> str:
     insert_job(job_record)  # persist job row to DB
     with jobs_lock:
         jobs[job_id] = job_record
-    logger.info(f"Created job {job_id} for user {user_id}")
+    logger.info(f"Created job {job_id} on task {task_id} for user {user_id}")
     return job_id
 
 
@@ -127,10 +128,10 @@ def complete_job(job_id: str, result: dict):
 
 
 def set_max_validations_per_user(limit: int):
-    """Set the effective per-user validation limit (called by main after loading active task)."""
+    """Set the effective per-user validation limit."""
     global MAX_VALIDATIONS_PER_USER
     MAX_VALIDATIONS_PER_USER = limit
-    logger.info(f"Validation limit set to {limit} (from active task or settings)")
+    logger.info(f"Validation limit set to {limit}")
 
 
 def get_quota_info(user_id: str) -> dict:

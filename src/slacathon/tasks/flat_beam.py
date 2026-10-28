@@ -2,7 +2,7 @@ import numpy as np
 import time
 from pydantic import BaseModel
 
-from .base import TaskInput, TaskResult
+from .base import Problem, TaskInput, TaskResult
 
 try:
     import importlib.resources as pkg_resources
@@ -168,8 +168,26 @@ def validate(data: Input) -> Result:
         )
 
 
-# Task protocol constants (required by task_loader + job_manager)
+# Task constants (copied onto FlatBeamProblem below)
 TARGET = 0.0
 MINIMIZE = True
 FAILURE_SCORE = 1.0e10
 MAX_VALIDATIONS_PER_USER = 10000
+
+
+class FlatBeamProblem(Problem):
+    TASK_NAME = TASK_NAME
+    INPUT_LABELS = INPUT_LABELS
+    BOUNDS = BOUNDS
+    TARGET = TARGET
+    MINIMIZE = MINIMIZE
+    FAILURE_SCORE = FAILURE_SCORE
+    MAX_VALIDATIONS_PER_USER = MAX_VALIDATIONS_PER_USER
+    Input = Input
+    Result = Result
+
+    def run(self, data: Input) -> Result:
+        return validate(data)
+
+
+TASK = FlatBeamProblem()

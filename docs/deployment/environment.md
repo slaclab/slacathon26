@@ -13,7 +13,6 @@ In Kubernetes, config comes from two sources:
 
 | Key | Value | Notes |
 |---|---|---|
-| `SLACATHON_ACTIVE_TASK` | `flat_beam` | Change to `fel` or `cuinj` to switch challenge |
 | `SLACATHON_ROOT_PATH` | `/slacathon26` | Must match ingress path prefix |
 | `SLACATHON_DB_FILE` | `/app/data/slacathon.db` | Path on PVC |
 | `SLACATHON_LEADERBOARD_FILE` | `/app/data/leaderboard.json` | Path on PVC |

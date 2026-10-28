@@ -3,7 +3,7 @@ import time
 import requests
 from requests.adapters import HTTPAdapter
 
-from .base import TaskInput, TaskResult
+from .base import Problem, TaskInput, TaskResult
 
 
 CUINJ_URL = os.getenv("CUINJ_URL", "https://ard-modeling-service.slac.stanford.edu/cuinj")
@@ -69,3 +69,22 @@ def validate(data: Input) -> Result:
         message=f"combined norm. emittance is {emit} um (lower is better)",
         evaltime=dt
     )
+
+
+class CuinjProblem(Problem):
+    TASK_NAME = TASK_NAME
+    INPUT_LABELS = INPUT_LABELS
+    BOUNDS = BOUNDS
+    TARGET = TARGET
+    MINIMIZE = MINIMIZE
+    FAILURE_SCORE = FAILURE_SCORE
+    MAX_VALIDATIONS_PER_USER = MAX_VALIDATIONS_PER_USER
+    MAX_CONCURRENCY = 4  # HTTP-bound
+    Input = Input
+    Result = Result
+
+    def run(self, data: Input) -> Result:
+        return validate(data)
+
+
+TASK = CuinjProblem()
